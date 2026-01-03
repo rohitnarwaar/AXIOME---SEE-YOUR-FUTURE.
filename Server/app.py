@@ -8,6 +8,7 @@ from forecast_module import (
     forecast_savings,
     forecast_loan_payoff,
     forecast_retirement_corpus,
+    forecast_spending_clusters,
 )
 
 load_dotenv()
@@ -79,6 +80,19 @@ def retirement_route():
             months=months,
         )
         return jsonify({"corpus": corpus}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------- Spending Clusters ----------
+@app.route("/clusters", methods=["POST"])
+def clusters_route():
+    try:
+        data = request.get_json(force=True) or {}
+        # User sends: {"Rent": 2000, "Food": 500, ...}
+        expenses = data.get("expenses", {})
+        
+        clusters = forecast_spending_clusters(expenses)
+        return jsonify({"clusters": clusters}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

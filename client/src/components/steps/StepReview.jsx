@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db } from "../../firebase"; 
+import { db } from "../../firebase";
 import { collection, addDoc } from "firebase/firestore";
 import analyzeFinance from "../../utils/analyzeFinance"; // ✅ Gemini helper
 
@@ -17,12 +17,27 @@ export default function StepReview({ formData }) {
     localStorage.setItem("lifeledgerFormData", JSON.stringify(formData));
 
     try {
-      // Save to Firestore
-      const docRef = await addDoc(collection(db, "users"), formData);
+      // Sanitize data (Firestore doesn't like undefined)
+      const cleanData = JSON.parse(JSON.stringify(formData));
+
+      // Save to Firestore with timestamp
+      const docRef = await addDoc(collection(db, "users"), {
+        ...cleanData,
+        createdAt: new Date()
+      });
       console.log("✅ Data saved with ID:", docRef.id);
 
+      // ✅ Save User ID to LocalStorage for Dashboard retrieval
+      localStorage.setItem("lifeledgerUserId", docRef.id);
+
       // Call Gemini for AI insights
-      const aiResult = await analyzeFinance(formData);
+      // We wrap this in a separate try-catch so it doesn't block the flow if it fails
+      let aiResult = { summary: "AI analysis pending..." };
+      try {
+        aiResult = await analyzeFinance(cleanData);
+      } catch (aiErr) {
+        console.error("AI Analysis failed but continuing:", aiErr);
+      }
 
       // Save AI result also in Firestore
       await addDoc(collection(db, "insights"), {
@@ -35,7 +50,7 @@ export default function StepReview({ formData }) {
       navigate("/dashboard");
     } catch (e) {
       console.error("❌ Error:", e);
-      setError("Failed to save your data. Please try again.");
+      setError(`Failed to save: ${e.message}`);
     }
 
     setLoading(false);

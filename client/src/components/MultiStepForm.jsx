@@ -25,7 +25,10 @@ const steps = [
 
 export default function MultiStepForm() {
   const [step, setStep] = useState(0);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState(() => {
+    const saved = localStorage.getItem("lifeledgerFormData");
+    return saved ? JSON.parse(saved) : {};
+  });
   const [errors, setErrors] = useState({});
 
   const StepComponent = steps[step].component;
@@ -54,27 +57,33 @@ export default function MultiStepForm() {
   };
 
   return (
+
     <div>
-      {/* Progress Indicator */}
-      <div className="flex justify-between mb-6">
-        {steps.map((s, i) => (
+      {/* Progress Bar */}
+      <div className="mb-8">
+        <div className="relative h-2 bg-gray-700 rounded-full overflow-hidden">
           <div
-            key={i}
-            className={`flex-1 text-center text-sm ${i === step ? "font-bold text-blue-600" : "text-gray-400"
-              }`}
-          >
-            {s.title}
-          </div>
-        ))}
+            className="absolute top-0 left-0 h-full bg-accent transition-all duration-500 ease-out"
+            style={{ width: `${((step + 1) / steps.length) * 100}%` }}
+          ></div>
+        </div>
+        <div className="flex justify-between mt-2 text-xs text-gray-400">
+          <span>Start</span>
+          <span className="text-white font-medium">{steps[step].title}</span>
+          <span>Finish</span>
+        </div>
       </div>
 
-      <StepComponent formData={formData} updateForm={updateData} errors={errors} />
+      <div className="min-h-[400px]">
+        <StepComponent formData={formData} updateForm={updateData} errors={errors} />
+      </div>
 
-      <div className="flex justify-between mt-6">
+      {/* Navigation Buttons */}
+      <div className="flex justify-between mt-8 pt-6 border-t border-white/10">
         <button
           onClick={back}
           disabled={step === 0}
-          className="px-4 py-2 bg-gray-400 rounded disabled:opacity-50"
+          className="px-6 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
         >
           Back
         </button>
@@ -82,9 +91,9 @@ export default function MultiStepForm() {
         {step < steps.length - 1 ? (
           <button
             onClick={next}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            className="px-8 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20"
           >
-            Next
+            Next Step
           </button>
         ) : null}
       </div>

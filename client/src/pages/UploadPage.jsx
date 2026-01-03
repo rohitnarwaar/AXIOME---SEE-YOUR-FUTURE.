@@ -84,11 +84,11 @@ export default function UploadPage() {
     //   console.error("❌ Error saving OCR upload:", e);
     // }
 
-    navigate("/dashboard");
+    navigate("/input");
   };
 
   return (
-    <div className="p-10 max-w-4xl mx-auto">
+    <div className="max-w-xl mx-auto p-6 pt-32 md:pt-36">
       <h1 className="text-3xl font-bold mb-4">📁 Upload Bank Statements</h1>
       <p className="text-lg text-gray-700 mb-6">
         Upload a PDF or image of your bank statement for automatic categorization.
@@ -101,40 +101,42 @@ export default function UploadPage() {
         className="mb-4"
       />
 
-      {loading && <p className="text-blue-600">🕐 Reading your file...</p>}
-      {error && <p className="text-red-600 mt-2">{error}</p>}
+      {loading && <p className="text-accent animate-pulse">🕐 Reading your file...</p>}
+      {error && <p className="text-red-400 mt-2">{error}</p>}
 
       {ocrText && (
-        <div className="mt-6 bg-gray-100 p-4 rounded shadow-sm">
-          <h2 className="text-lg font-bold mb-2">🧾 Extracted Text:</h2>
-          <pre className="whitespace-pre-wrap text-sm">{ocrText}</pre>
+        <div className="mt-8 glass-panel p-6 rounded-2xl">
+          <h2 className="text-lg font-bold mb-4 text-primary">🧾 Extracted Text:</h2>
+          <pre className="whitespace-pre-wrap text-sm text-gray-400 font-mono overflow-x-auto">{ocrText}</pre>
         </div>
       )}
 
       {Object.keys(editableCategories).length > 0 && (
-        <div className="mt-6 bg-white p-4 border rounded shadow">
-          <h2 className="text-lg font-semibold mb-2">🧠 Detected & Editable Expense Categories</h2>
-          <p className="text-gray-500 text-sm mb-2">
-            Review and adjust the detected categories before saving them for analysis.
+        <div className="mt-8 glass-panel p-6 rounded-2xl">
+          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <span className="text-xl">🧠</span> Detected Categories
+          </h2>
+          <p className="text-gray-400 text-sm mb-6">
+            Review and adjust the detected categories before saving.
           </p>
 
-          <table className="w-full text-sm border mt-2">
+          <table className="w-full text-sm border-separate border-spacing-y-2">
             <thead>
-              <tr className="bg-gray-200">
+              <tr className="text-gray-500">
                 <th className="p-2 text-left">Category</th>
                 <th className="p-2 text-left">Amount (₹)</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(editableCategories).map(([cat, amt]) => (
-                <tr key={cat} className="border-t">
-                  <td className="p-2">{cat}</td>
-                  <td className="p-2">
+                <tr key={cat} className="group">
+                  <td className="p-3 bg-white/5 rounded-l-lg group-hover:bg-white/10 transition-colors">{cat}</td>
+                  <td className="p-3 bg-white/5 rounded-r-lg group-hover:bg-white/10 transition-colors">
                     <input
                       type="number"
                       value={amt}
                       onChange={(e) => handleEdit(cat, e.target.value)}
-                      className="w-full border rounded p-1"
+                      className="w-full bg-transparent border-none focus:ring-0 text-accent font-mono text-right"
                     />
                   </td>
                 </tr>
@@ -145,9 +147,9 @@ export default function UploadPage() {
           <button
             onClick={handleUseInAnalysis}
             disabled={loading}
-            className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+            className="mt-6 w-full py-3 bg-primary text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg shadow-primary/20"
           >
-            {loading ? "Processing..." : "➕ Use This Data in Dashboard Analysis"}
+            {loading ? "Processing..." : "Use Data in Analysis"}
           </button>
         </div>
       )}
