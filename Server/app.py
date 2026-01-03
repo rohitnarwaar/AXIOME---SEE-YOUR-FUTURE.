@@ -97,7 +97,7 @@ def analyze_route():
         context = data.get("context", {})
 
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
         user_text = f"""You're a financial advisor. Analyze this user's data:
 {context}

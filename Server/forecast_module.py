@@ -38,9 +38,7 @@ def forecast_loan_payoff(loan_amount, monthly_emi, interest_rate=0.10):
 
     return timeline
 
-def forecast_retirement_corpus(current_age, current_savings, monthly_contribution, annual_return_rate=0.08, retirement_age=60):
-    years = retirement_age - current_age
-    months = years * 12
+def forecast_retirement_corpus(current_savings, monthly_contribution, months, annual_return_rate=0.08):
     monthly_return_rate = (1 + annual_return_rate) ** (1/12) - 1
 
     balance = current_savings
