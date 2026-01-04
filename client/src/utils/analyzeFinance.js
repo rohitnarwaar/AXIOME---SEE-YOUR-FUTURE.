@@ -1,42 +1,53 @@
-// client/src/utils/analyzeFinance.js
+function toNum(v) {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function generateLocalMetrics(data) {
-  const income = parseFloat(data.monthlyIncome || 0);
-  const expenses = parseFloat(data.monthlyExpenses || 0);
-  const liabilities = parseFloat(data.liabilities || 0);
-  const assets = parseFloat(data.assets || 0);
-  const savings = income - expenses;
+  const income = toNum(data.income);
+
+  const expenses =
+    toNum(data.rent) +
+    toNum(data.food) +
+    toNum(data.transport) +
+    toNum(data.misc);
+
+  const assets =
+    toNum(data.savings) +
+    toNum(data.fd) +
+    toNum(data.stocks) +
+    toNum(data.crypto) +
+    toNum(data.realEstate);
+
+  const liabilities =
+    toNum(data.loanAmount) +
+    toNum(data.creditCardDebt);
+
+  const monthlySavings = income - expenses;
   const netWorth = assets - liabilities;
 
-  const savingsRate = income > 0 ? savings / income : 0;
-  const debtRatio = assets > 0 ? liabilities / assets : 1;
-  const emiBurden = income > 0 ? liabilities / income : 1;
+  const savingsRate = income > 0 ? monthlySavings / income : 0;
 
   let healthScore = 100;
   if (savingsRate < 0.1) healthScore -= 20;
-  if (debtRatio > 0.5) healthScore -= 20;
-  if (emiBurden > 0.4) healthScore -= 20;
+  if (liabilities > assets) healthScore -= 20;
   if (netWorth < 0) healthScore -= 20;
-  if (income < 20000) healthScore -= 10;
   healthScore = Math.max(0, Math.min(100, healthScore));
 
   const suggestedChanges = [];
   if (savingsRate < 0.1) suggestedChanges.push("Increase savings to at least 10% of your income.");
-  if (debtRatio > 0.5) suggestedChanges.push("Reduce liabilities to improve debt-to-asset ratio.");
-  if (emiBurden > 0.4) suggestedChanges.push("EMI burden is high. Consider refinancing or repaying loans early.");
-  if (netWorth < 0) suggestedChanges.push("Net worth is negative. Focus on reducing debt and increasing assets.");
-  if (income < 20000) suggestedChanges.push("Consider upskilling or seeking higher-paying opportunities.");
+  if (liabilities > assets) suggestedChanges.push("Reduce liabilities to improve debt position.");
+  if (toNum(data.creditCardDebt) > 0) suggestedChanges.push("Prioritize clearing credit card debt first.");
 
   return {
     healthScore,
-    debtToAssetRatio: +(debtRatio * 100).toFixed(2),
-    monthlyBurn: expenses,
+    income,
+    expenses,
+    monthlySavings,
+    assets,
+    liabilities,
     netWorth,
-    savingsRate: (savingsRate * 100).toFixed(2) + "%",
     suggestedChanges,
-    summary: savings > 0
-      ? "You're saving money. Keep going!"
-      : "You're overspending. Reduce your expenses.",
   };
 }
 
@@ -48,16 +59,15 @@ You're a financial advisor. Based on this user's financial data, give:
 - Net worth analysis
 - Budget feedback
 - Debt advice
-- Goal alignment
-- Investment strategy
+- Short actionable checklist (max 5 bullets)
 
 User Data:
 ${JSON.stringify(data, null, 2)}
 `;
 
   try {
-    // ✅ Call Flask backend (Gemini)
-    const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
+    const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8080";
+
     const res = await fetch(`${API_BASE}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -65,17 +75,17 @@ ${JSON.stringify(data, null, 2)}
     });
 
     const json = await res.json();
-    const aiSummary = json.result || "⚠️ AI analysis failed.";
+    if (!res.ok) throw new Error(json.error || "AI request failed");
 
     return {
       ...localInsights,
-      aiSummary,
+      aiSummary: json.summary || "AI summary missing.",
     };
   } catch (err) {
     console.error("Gemini analysis error:", err);
     return {
       ...localInsights,
-      aiSummary: "⚠️ AI analysis failed. Please try again.",
+      aiSummary: "AI analysis failed. Check backend logs / API key / model.",
     };
   }
 }

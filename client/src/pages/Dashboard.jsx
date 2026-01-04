@@ -168,7 +168,7 @@ export default function Dashboard() {
           EMI: parseFloat(userData.monthlyEmi || userData.emi || 0)
         };
 
-        fetch(`${import.meta.env.VITE_API_BASE}/clusters`, {
+        fetch(`${import.meta.env.VITE_API_BASE}/analyze/clusters`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ expenses: expensePayload }),

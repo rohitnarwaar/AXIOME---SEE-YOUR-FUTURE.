@@ -34,9 +34,15 @@ def forecast_route():
         if monthly_saving < 0 or months <= 0:
             return jsonify({"error": "Invalid inputs"}), 400
 
+        print(f"📊 Calling forecast_savings with monthly_saving={monthly_saving}, months={months}")
         series = forecast_savings(monthly_saving, months=months)
+        print(f"📊 forecast_savings returned {len(series)} items")
+        print(f"📊 First item: {series[0]}")
         return jsonify({"series": series}), 200
     except Exception as e:
+        import traceback
+        print("❌ ERROR in forecast_route:")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # ---------- Loan payoff ----------
@@ -44,21 +50,29 @@ def forecast_route():
 def loan_payoff_route():
     try:
         data = request.get_json(force=True) or {}
-        principal = float(data.get("principal", 0))
-        annual_interest_rate = float(data.get("annualInterestRate", 0))
-        monthly_emi = float(data.get("monthlyEmi", 0))
 
-        if principal <= 0 or annual_interest_rate < 0 or monthly_emi <= 0:
+        principal = float(data.get("principal", 0))
+        annual_interest_rate = float(
+            data.get("annual_interest_rate") or data.get("annualInterestRate") or 0
+        )
+        monthly_emi = float(
+            data.get("monthly_emi") or data.get("monthlyEmi") or 0
+        )
+
+        if principal <= 0 or annual_interest_rate <= 0 or monthly_emi <= 0:
             return jsonify({"error": "Invalid inputs"}), 400
 
         timeline = forecast_loan_payoff(
-            principal=principal,
-            annual_interest_rate=annual_interest_rate,
+            loan_amount=principal,
+            interest_rate=annual_interest_rate,
             monthly_emi=monthly_emi,
         )
+
         return jsonify({"timeline": timeline}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # ---------- Retirement corpus ----------
 @app.route("/retirement", methods=["POST"])
@@ -84,7 +98,7 @@ def retirement_route():
         return jsonify({"error": str(e)}), 500
 
 # ---------- Spending Clusters ----------
-@app.route("/clusters", methods=["POST"])
+@app.route("/analyze/clusters", methods=["POST"])
 def clusters_route():
     try:
         data = request.get_json(force=True) or {}
@@ -101,40 +115,38 @@ def clusters_route():
 def analyze_route():
     try:
         if not GEMINI_API_KEY:
-            print("❌ Missing GEMINI_API_KEY")
             return jsonify({"error": "GEMINI_API_KEY not set"}), 500
 
         data = request.get_json(force=True) or {}
-        print("📩 Incoming /analyze data:", data)
-
-        prompt = data.get("prompt", "Provide a concise personal finance analysis.")
         context = data.get("context", {})
 
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
-        user_text = f"""You're a financial advisor. Analyze this user's data:
-{context}
+        # Use gemini-pro for maximum compatibility
+        try:
+            model = genai.GenerativeModel("gemini-pro")
+        except Exception as e:
+            return jsonify({"error": f"Could not initialize Gemini model: {str(e)}"}), 500
 
-Return:
-- Net worth analysis
-- Budget feedback
-- Debt advice
-- Short actionable checklist (max 5 bullets)
-"""
 
-        print("🧠 Sending prompt to Gemini API...")
-        resp = model.generate_content(user_text)
-        print("✅ Gemini API response received")
+        prompt = data.get("prompt", "")
+        if not prompt and context:
+             prompt = f"Analyze this financial context: {context}"
+        
+        if not prompt:
+             return jsonify({"error": "No prompt provided"}), 400
 
-        text = getattr(resp, "text", str(resp))
+        print(f"🧠 Sending prompt to Gemini API (using model: {model.model_name})...")
+        response = model.generate_content(prompt)
+        text = response.text if hasattr(response, "text") else str(response)
+
         return jsonify({"summary": text}), 200
 
     except Exception as e:
         import traceback
-        print("❌ ERROR in /analyze route:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 
 # ---------- What-if (optional convenience) ----------

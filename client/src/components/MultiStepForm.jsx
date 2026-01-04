@@ -8,7 +8,7 @@ import StepReview from "./steps/StepReview";
 
 const requiredFields = {
   0: ["income"],
-  1: ["rent", "food", "transport", "misc"],
+  1: ["rent", "food", "transport"],
   2: ["savings"],
   3: ["loanAmount", "emi"],
   4: ["age", "profession"],
@@ -25,19 +25,28 @@ const steps = [
 
 export default function MultiStepForm() {
   const [step, setStep] = useState(0);
-  const [formData, setFormData] = useState(() => {
-    const saved = localStorage.getItem("lifeledgerFormData");
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
 
   const StepComponent = steps[step].component;
 
+  const updateForm = (newData) => {
+    setFormData((prev) => ({ ...prev, ...newData }));
+    // Clear error for updated keys
+    setErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(newData).forEach((k) => delete next[k]);
+      return next;
+    });
+  };
+
   const validateStep = () => {
     const keysToCheck = requiredFields[step] || [];
     const newErrors = {};
+
     for (let key of keysToCheck) {
-      if (!formData[key]) {
+      const v = formData[key];
+      if (v === undefined || v === null || String(v).trim() === "") {
         newErrors[key] = `${key} is required`;
       }
     }
@@ -52,38 +61,27 @@ export default function MultiStepForm() {
 
   const back = () => setStep((prev) => Math.max(prev - 1, 0));
 
-  const updateData = (newData) => {
-    setFormData((prev) => ({ ...prev, ...newData }));
-  };
-
   return (
-
     <div>
-      {/* Progress Bar */}
-      <div className="mb-8">
-        <div className="relative h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="flex justify-between mb-6 gap-2 flex-wrap">
+        {steps.map((s, i) => (
           <div
-            className="absolute top-0 left-0 h-full bg-accent transition-all duration-500 ease-out"
-            style={{ width: `${((step + 1) / steps.length) * 100}%` }}
-          ></div>
-        </div>
-        <div className="flex justify-between mt-2 text-xs text-gray-400">
-          <span>Start</span>
-          <span className="text-white font-medium">{steps[step].title}</span>
-          <span>Finish</span>
-        </div>
+            key={i}
+            className={`text-sm ${i === step ? "font-bold text-blue-600" : "text-gray-400"
+              }`}
+          >
+            {s.title}
+          </div>
+        ))}
       </div>
 
-      <div className="min-h-[400px]">
-        <StepComponent formData={formData} updateForm={updateData} errors={errors} />
-      </div>
+      <StepComponent formData={formData} updateForm={updateForm} errors={errors} />
 
-      {/* Navigation Buttons */}
-      <div className="flex justify-between mt-8 pt-6 border-t border-white/10">
+      <div className="flex justify-between mt-6">
         <button
           onClick={back}
           disabled={step === 0}
-          className="px-6 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+          className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
         >
           Back
         </button>
@@ -91,9 +89,9 @@ export default function MultiStepForm() {
         {step < steps.length - 1 ? (
           <button
             onClick={next}
-            className="px-8 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20"
+            className="px-4 py-2 bg-blue-600 text-white rounded"
           >
-            Next Step
+            Next
           </button>
         ) : null}
       </div>

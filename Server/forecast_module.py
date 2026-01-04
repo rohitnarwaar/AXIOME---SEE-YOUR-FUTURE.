@@ -1,22 +1,38 @@
-from prophet import Prophet
 import pandas as pd
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+
 
 def forecast_savings(saving_per_month, months=120):
-    # Create dummy savings history
-    data = pd.DataFrame({
-        'ds': pd.date_range(start='2023-01-01', periods=12, freq='MS'),
-        'y': [saving_per_month * (i+1) for i in range(12)]  # simple growth
-    })
+    """
+    Simple savings forecast using compound growth.
+    Assumes a modest 6% annual return on savings.
+    """
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+    
+    annual_return_rate = 0.06
+    monthly_return_rate = (1 + annual_return_rate) ** (1/12) - 1
+    
+    result = []
+    balance = 0
+    current_date = datetime.now()
+    
+    for month in range(months):
+        # Add monthly saving
+        balance += saving_per_month
+        # Apply monthly return
+        balance *= (1 + monthly_return_rate)
+        
+        result.append({
+            'ds': (current_date + relativedelta(months=month)).strftime('%Y-%m-%d'),
+            'yhat': round(balance, 2)
+        })
+    
+    return result
 
-    model = Prophet()
-    model.fit(data)
 
-    future = model.make_future_dataframe(periods=months, freq='MS')
-    forecast = model.predict(future)
 
-    result = forecast[['ds', 'yhat']].tail(12 * 10)  # next 10 years
-    return result.to_dict(orient='records')
 
 def forecast_loan_payoff(loan_amount, monthly_emi, interest_rate=0.10):
     balance = loan_amount
