@@ -45,7 +45,6 @@ export default function Dashboard() {
         if (!userData) {
           const localData = localStorage.getItem("lifeledgerFormData");
           if (localData) {
-            console.log("📱 Using Offline Data");
             userData = JSON.parse(localData);
           }
         }

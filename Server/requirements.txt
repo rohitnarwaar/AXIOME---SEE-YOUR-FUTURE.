@@ -1,9 +1,8 @@
 flask
 flask-cors
-google-generativeai
+groq
 python-dotenv
 python-dateutil
 pandas
 scikit-learn
 plotly
-

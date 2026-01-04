@@ -2,7 +2,7 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-import google.generativeai as genai
+from groq import Groq
 
 from forecast_module import (
     forecast_savings,
@@ -12,8 +12,11 @@ from forecast_module import (
 )
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-print("✅ GEMINI_API_KEY loaded:", bool(GEMINI_API_KEY))
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+print("✅ GROQ_API_KEY loaded:", bool(GROQ_API_KEY))
+
+client = Groq(api_key=GROQ_API_KEY)
+
 
 
 app = Flask(__name__)
@@ -34,10 +37,7 @@ def forecast_route():
         if monthly_saving < 0 or months <= 0:
             return jsonify({"error": "Invalid inputs"}), 400
 
-        print(f"📊 Calling forecast_savings with monthly_saving={monthly_saving}, months={months}")
         series = forecast_savings(monthly_saving, months=months)
-        print(f"📊 forecast_savings returned {len(series)} items")
-        print(f"📊 First item: {series[0]}")
         return jsonify({"series": series}), 200
     except Exception as e:
         import traceback
@@ -71,6 +71,9 @@ def loan_payoff_route():
         return jsonify({"timeline": timeline}), 200
 
     except Exception as e:
+        import traceback
+        print("❌ ERROR in loan_payoff_route:")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -95,6 +98,9 @@ def retirement_route():
         )
         return jsonify({"corpus": corpus}), 200
     except Exception as e:
+        import traceback
+        print("❌ ERROR in retirement_route:")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # ---------- Spending Clusters ----------
@@ -108,44 +114,52 @@ def clusters_route():
         clusters = forecast_spending_clusters(expenses)
         return jsonify({"clusters": clusters}), 200
     except Exception as e:
+        import traceback
+        print("❌ ERROR in clusters_route:")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# ---------- AI Narrative (Gemini) ----------
+# ---------- AI Narrative (Groq) ----------
 @app.route("/analyze", methods=["POST"])
 def analyze_route():
     try:
-        if not GEMINI_API_KEY:
-            return jsonify({"error": "GEMINI_API_KEY not set"}), 500
+        if not GROQ_API_KEY:
+            return jsonify({"error": "GROQ_API_KEY not set"}), 500
 
         data = request.get_json(force=True) or {}
         context = data.get("context", {})
 
-        genai.configure(api_key=GEMINI_API_KEY)
+        prompt = f"""
+You are a personal finance advisor.
 
-        # Use gemini-pro for maximum compatibility
-        try:
-            model = genai.GenerativeModel("gemini-pro")
-        except Exception as e:
-            return jsonify({"error": f"Could not initialize Gemini model: {str(e)}"}), 500
+Analyze the user's financial data below and provide:
+- Net worth analysis
+- Budget feedback
+- Debt advice
+- Short actionable checklist (max 5 bullets)
 
+User Data:
+{context}
+"""
 
-        prompt = data.get("prompt", "")
-        if not prompt and context:
-             prompt = f"Analyze this financial context: {context}"
-        
-        if not prompt:
-             return jsonify({"error": "No prompt provided"}), 400
+        completion = client.chat.completions.create(
+            model="mixtral-8x7b-32768",
+            messages=[
+                {"role": "system", "content": "You are a helpful financial advisor."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.6,
+            max_tokens=500
+        )
 
-        print(f"🧠 Sending prompt to Gemini API (using model: {model.model_name})...")
-        response = model.generate_content(prompt)
-        text = response.text if hasattr(response, "text") else str(response)
-
-        return jsonify({"summary": text}), 200
+        summary = completion.choices[0].message.content
+        return jsonify({"summary": summary}), 200
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 
 

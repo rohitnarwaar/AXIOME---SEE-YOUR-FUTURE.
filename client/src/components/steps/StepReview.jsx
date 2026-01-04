@@ -25,7 +25,6 @@ export default function StepReview({ formData }) {
         ...cleanData,
         createdAt: new Date()
       });
-      console.log("✅ Data saved with ID:", docRef.id);
 
       // ✅ Save User ID to LocalStorage for Dashboard retrieval
       localStorage.setItem("lifeledgerUserId", docRef.id);

@@ -20,7 +20,7 @@ export default function UploadPage() {
     setLoading(true);
     setError("");
 
-    Tesseract.recognize(file, "eng", { logger: (m) => console.log(m) })
+    Tesseract.recognize(file, "eng")
       .then(({ data: { text } }) => {
         setOcrText(text);
         const rawCategories = parseOCRToCategories(text);
