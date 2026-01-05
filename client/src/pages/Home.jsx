@@ -85,10 +85,31 @@ export default function Home() {
         style={{ bottom: '64px', left: '15%', color: textColor }}
       >
         <p className="text-xs tracking-widest mb-1 font-light">COMPOSED OF:</p>
-        <p className="text-sm leading-relaxed">
+        <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
           Models · Forecasts · Scenarios
         </p>
       </motion.div>
+
+      {/* INFO Section - Appears on scroll */}
+      <div className="" style={{ marginTop: '-15vh' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          viewport={{ once: false, amount: 0.3 }}
+          className="space-y-4 max-w-2xl"
+          style={{ marginLeft: '15%', color: textColor }}
+        >
+          <h3 className="text-xs tracking-widest font-light uppercase">INFO</h3>
+          <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+            AXIOMÉ is a personal system for modeling the present and reasoning about the future.
+          </p>
+          <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+            It brings together fragmented financial signals into a coherent structure — allowing patterns, risks, and possibilities to surface over time. Rather than recording what has already happened, AXIOMÉ focuses on exploring what could happen, and why.<br />
+            Designed as a thinking companion, the system helps individuals understand consequences before decisions are made, offering clarity without noise and foresight without prescription.
+          </p>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
