@@ -1,8 +1,20 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Home() {
   const { scrollYProgress } = useScroll();
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to log out:', error);
+    }
+  };
 
   // Transform scroll progress to RGB values
   // 0% scroll = red, 40% scroll = white, 70% scroll = black
@@ -50,9 +62,30 @@ export default function Home() {
           className="flex gap-8 text-sm tracking-wide"
           style={{ fontFamily: '"Source Code Pro", monospace' }}
         >
-          <Link to="/input" className="hover:opacity-70 transition-opacity">Start</Link>
-          <Link to="/dashboard" className="hover:opacity-70 transition-opacity">Dashboard</Link>
-          <a href="#info" className="hover:opacity-70 transition-opacity">Contact</a>
+          {currentUser ? (
+            <>
+              <Link to="/dashboard" className="hover:opacity-70 transition-opacity">Dashboard</Link>
+              <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">Logout</button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="hover:opacity-70 transition-opacity">Login</Link>
+              <Link to="/register" className="hover:opacity-70 transition-opacity">Register</Link>
+            </>
+          )}
+
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              const contactSection = document.getElementById('contact');
+              if (contactSection) {
+                contactSection.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+            className="hover:opacity-70 transition-opacity"
+          >
+            Contact
+          </button>
         </motion.div>
       </motion.nav>
 
@@ -343,6 +376,7 @@ export default function Home() {
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: false }}
+          id="contact"
           className="pb-12"
           style={{ marginLeft: '15%', marginRight: '15%', color: textColor }}
         >
