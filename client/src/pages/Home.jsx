@@ -1,11 +1,78 @@
 import { Link, useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
+import CassetteImage from '../assets/CASST.png';
+import CircleImage from '../assets/CIRCLE.png';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const { scrollYProgress } = useScroll();
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+
+  const [activeStep, setActiveStep] = useState(0);
+  const stepRefs = useRef([]);
+
+  useEffect(() => {
+    const observers = [];
+
+    stepRefs.current.forEach((ref, index) => {
+      if (!ref) return;
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setActiveStep(index);
+          }
+        },
+        {
+          rootMargin: "-40% 0px -40% 0px", // Trigger when item is near center
+          threshold: 0
+        }
+      );
+
+      observer.observe(ref);
+      observers.push(observer);
+    });
+
+    return () => observers.forEach(obs => obs.disconnect());
+  }, []);
+
+  // Visual Progression States
+  // Early (0-3): Distant, blurred, darker
+  // Middle (4-8): Clear, balanced, presence
+  // Late (9-12): Bright, ethereal, resolved
+  const getVisualState = (index) => {
+    if (index <= 3) {
+      // Early: I-IV
+      return {
+        scale: 0.8 + (index * 0.05), // 0.8 -> 0.95
+        blur: 8 - (index * 2),       // 8px -> 2px
+        brightness: 0.7 + (index * 0.05), // 0.7 -> 0.85
+        rotate: index * 2
+      };
+    } else if (index <= 8) {
+      // Middle: V-IX
+      const progress = index - 4;
+      return {
+        scale: 1,
+        blur: 0,
+        brightness: 1,
+        rotate: 10 + (progress * 5)
+      };
+    } else {
+      // Late: X-XIII
+      const progress = index - 9;
+      return {
+        scale: 1 + (progress * 0.05), // 1 -> 1.15
+        blur: progress * 1,           // 0 -> 3px (dreamy blur)
+        brightness: 1 + (progress * 0.1), // 1 -> 1.3
+        rotate: 35 + (progress * 10)
+      };
+    }
+  };
+
+  const visualState = getVisualState(activeStep);
 
   const handleLogout = async () => {
     try {
@@ -17,17 +84,19 @@ export default function Home() {
   };
 
   // Transform scroll progress to RGB values
-  // 0% scroll = red, 40% scroll = white, 70% scroll = black
+  // 0-0.1: Red -> White
+  // 0.1-0.65: White Background + Black Text (Maximized contrast zone for Models)
+  // 0.65-0.7: Transition to Black (BIOS Section starts here)
   const backgroundColor = useTransform(
     scrollYProgress,
-    [0, 0.31, 0.35],
-    ['rgb(220, 38, 38)', 'rgb(255, 255, 255)', 'rgb(0, 0, 0)']
+    [0, 0.1, 0.65, 0.7],
+    ['rgb(220, 38, 38)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(0, 0, 0)']
   );
 
   const textColor = useTransform(
     scrollYProgress,
-    [0, 0.31, 0.35],
-    ['rgb(255, 255, 255)', 'rgb(0, 0, 0)', 'rgb(255, 255, 255)']
+    [0, 0.1, 0.65, 0.7],
+    ['rgb(255, 255, 255)', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(255, 255, 255)']
   );
 
   return (
@@ -135,7 +204,7 @@ export default function Home() {
         >
           <h3 className="text-xs tracking-widest font-light uppercase">INFO</h3>
           <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
-            AXIOMÉ is a personal system for modeling the present and reasoning about the future.
+            AXIOMÉ(ax-i-oh-may)is a personal system for modeling the present and reasoning about the future.
           </p>
           <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
             It brings together fragmented financial signals into a coherent structure — allowing patterns, risks, and possibilities to surface over time. Rather than recording what has already happened, AXIOMÉ focuses on exploring what could happen, and why.<br />
@@ -159,58 +228,72 @@ export default function Home() {
           }}
         />
 
-        {/* Tour Dates Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          viewport={{ once: false, amount: 0.2 }}
-          className="flex gap-16 items-center pb-20"
-          style={{ marginLeft: '15%', marginRight: '15%', color: textColor }}
-        >
-          {/* Circular Image */}
-          <div className="flex-shrink-0">
-            <div
-              className="w-80 h-80 rounded-full overflow-hidden bg-gray-200"
-              style={{ border: `2px solid ${textColor}` }}
-            >
-              <img
-                src="https://via.placeholder.com/400"
-                alt="Tour"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </div>
+        {/* Models & Scenarios Section */}
+        <motion.div className="flex gap-16 items-start pb-40 relative" style={{ marginLeft: '15%', marginRight: '15%', color: textColor }}>
 
-          {/* Tour Dates List */}
-          <div className="flex-1">
-            <h3 className="text-sm tracking-widest mb-8 font-light text-left" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+          {/* Sticky Visual Lens */}
+          <motion.div
+            className="sticky top-0 w-1/2 h-screen flex flex-col items-center justify-center"
+            style={{ color: textColor }}
+          >
+            <h3 className="text-sm tracking-widest mb-12 font-light text-center z-10" style={{ fontFamily: '"Source Code Pro", monospace' }}>
               MODELS & SCENARIOS
             </h3>
-            <div className="space-y-2" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+            <div className="relative w-[400px] h-[400px] rounded-full overflow-hidden border border-white/10">
+              <motion.img
+                src={CircleImage}
+                alt="Trajectory Lens"
+                className="w-full h-full object-cover"
+                animate={{
+                  scale: visualState.scale,
+                  filter: `blur(${visualState.blur}px) brightness(${visualState.brightness})`,
+                  rotate: visualState.rotate
+                }}
+                transition={{ duration: 1.5, ease: "easeInOut" }} // Slow, non-reactive
+              />
+
+              {/* Optional overlay for extra atmosphere */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+            </div>
+          </motion.div>
+
+          {/* Scrollable Content List */}
+          <motion.div
+            className="w-1/2 pt-[10vh] pb-[10vh] pl-12"
+            style={{ color: textColor }}
+          >
+
+            <div className="space-y-24" style={{ fontFamily: '"Source Code Pro", monospace' }}>
               {[
-                { date: '01  /  I', city: 'Present State Model' },
-                { date: '02  /  II', city: 'Income & Expense Structure' },
-                { date: '03  /  III', city: 'Cash Flow Patterns' },
-                { date: '04  /  IV', city: 'Savings Forecast' },
-                { date: '05  /  V', city: 'Spending Behaviour Signals' },
-                { date: '06  /  VI', city: 'Risk Indicators' },
-                { date: '07  /  VII', city: 'Short-Term Outlook' },
-                { date: '08  /  VIII', city: 'Long-Term Projections' },
-                { date: '09  /  IX', city: 'Loan Payoff Path' },
-                { date: '10  /  X', city: 'Retirement Projection' },
-                { date: '11  /  XI', city: 'Net Worth Trajectory' },
-                { date: '12  /  XII', city: 'What-If Scenarios' },
-                { date: '13  /  XIII', city: 'Decision Notes' }
+                { date: '01  /  I', city: 'Present State Model', desc: 'Baseline financial reality.' },
+                { date: '02  /  II', city: 'Income & Expense Structure', desc: 'Categorized inflows & outflows.' },
+                { date: '03  /  III', city: 'Cash Flow Patterns', desc: 'Timing & liquidity analysis.' },
+                { date: '04  /  IV', city: 'Savings Forecast', desc: 'Projected accumulation curves.' },
+                { date: '05  /  V', city: 'Spending Behaviour Signals', desc: 'Habitual anomalies detected.' },
+                { date: '06  /  VI', city: 'Risk Indicators', desc: 'Volatility & exposure stress-tests.' },
+                { date: '07  /  VII', city: 'Short-Term Outlook', desc: '3-12 month liquidity horizon.' },
+                { date: '08  /  VIII', city: 'Long-Term Projections', desc: 'Multi-decade compound trajectories.' },
+                { date: '09  /  IX', city: 'Loan Payoff Path', desc: 'Debt extinction timeline.' },
+                { date: '10  /  X', city: 'Retirement Projection', desc: 'Post-work sustainability model.' },
+                { date: '11  /  XI', city: 'Net Worth Trajectory', desc: 'Total asset evolution.' },
+                { date: '12  /  XII', city: 'What-If Scenarios', desc: 'Alternative reality simulation.' },
+                { date: '13  /  XIII', city: 'Decision Notes', desc: 'Synthesized actionable intelligence.' }
               ].map((show, index) => (
-                <div key={index} className="flex justify-between items-center text-xs py-1">
-                  <span className="w-20">{show.date}</span>
-                  <span className="flex-1 text-left">{show.city}</span>
-                  <a href="#" className="hover:opacity-70 transition-opacity">View →</a>
+                <div
+                  key={index}
+                  ref={el => stepRefs.current[index] = el}
+                  className={`transition-opacity duration-1000 ${index === activeStep ? 'opacity-100' : 'opacity-30'}`}
+                >
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs tracking-widest opacity-50">{show.date}</span>
+                    <span className="text-xl font-light">{show.city}</span>
+                    <p className="text-sm opacity-60 max-w-xs leading-relaxed">{show.desc}</p>
+                    <a href="#" className="text-xs hover:opacity-70 transition-opacity mt-2 block">View Analysis →</a>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         </motion.div>
 
         {/* Horizontal Line Separator */}
@@ -285,10 +368,10 @@ export default function Home() {
           {/* Video Grid */}
           <div className="grid grid-cols-4 gap-8">
             {[
-              { title: 'Present Snapshot', image: 'https://via.placeholder.com/300x200' },
-              { title: 'Savings Over Time', image: 'https://via.placeholder.com/300x200' },
-              { title: 'Debt & Payoff Paths', image: 'https://via.placeholder.com/300x200' },
-              { title: 'Future Scenerios', image: 'https://via.placeholder.com/300x200' }
+              { title: 'Present Snapshot', image: 'https://placehold.co/300x200/222222/666666/png?text=Snapshot' },
+              { title: 'Savings Over Time', image: 'https://placehold.co/300x200/222222/666666/png?text=Savings' },
+              { title: 'Debt & Payoff Paths', image: 'https://placehold.co/300x200/222222/666666/png?text=Debt' },
+              { title: 'Future Scenerios', image: 'https://placehold.co/300x200/222222/666666/png?text=Future' }
             ].map((video, index) => (
               <a
                 key={index}
@@ -335,18 +418,18 @@ export default function Home() {
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: false, amount: 0.2 }}
-          className="pb-20"
+          className="pb-2"
           style={{ marginLeft: '15%', marginRight: '15%', color: textColor }}
         >
-          <h3 className="text-xs tracking-widest mb-12 font-light uppercase text-center" style={{ fontFamily: '"Source Code Pro", monospace' }}>
-            THE INKWELL ECHOES: DISCOVER THE EP.
+          <h3 className="text-xl tracking-widest mb-2 font-light uppercase text-center" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+            SEE YOUR FUTURE — BEFORE YOU LIVE IT.
           </h3>
 
           {/* Cassette Image */}
           <div className="flex justify-center">
-            <div className="w-full max-w-2xl">
+            <div className="w-full max-w-5xl">
               <img
-                src="https://via.placeholder.com/800x500"
+                src={CassetteImage}
                 alt="Cassette Tape"
                 className="w-full h-auto"
               />
@@ -410,6 +493,6 @@ export default function Home() {
           </div>
         </motion.footer>
       </div>
-    </motion.div>
+    </motion.div >
   );
 }
