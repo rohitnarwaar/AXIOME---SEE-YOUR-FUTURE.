@@ -1,0 +1,30 @@
+name: AXIOME Backend Deploy (Staging)
+
+on:
+  push:
+    branches:
+      - staging
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd AXIOME---SEE-YOUR-FUTURE/Server
+            git checkout staging
+            git pull origin staging
+            docker build -t axiome-backend-staging .
+            docker stop axiome-staging || true
+            docker rm axiome-staging || true
+            docker run -d -p 5001:5000 \
+              -e GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} \
+              --name axiome-staging \
+              axiome-backend-staging
