@@ -86,7 +86,7 @@ export default function Dashboard() {
 
         // --- Savings forecast ---
         if (savings > 0) {
-          fetch(`${import.meta.env.VITE_API_BASE}/forecast`, {
+          fetch(`${import.meta.env.VITE_API_BASE_URL}/forecast`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ monthlySaving: savings, months: 120 }),
@@ -109,7 +109,7 @@ export default function Dashboard() {
         const emi = parseFloat(userData.emi || userData.monthlyEMI || 0);
         const rate = parseFloat(userData.interestRate || 0.1);
         if (loanAmount > 0 && emi > 0) {
-          fetch(`${import.meta.env.VITE_API_BASE}/loan-payoff`, {
+          fetch(`${import.meta.env.VITE_API_BASE_URL}/loan-payoff`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -134,7 +134,7 @@ export default function Dashboard() {
         // --- Retirement corpus ---
         const currentSavings = parseFloat(userData.currentSavings || savings * 12);
         const monthlyContribution = parseFloat(userData.monthlyContribution || savings);
-        fetch(`${import.meta.env.VITE_API_BASE}/retirement`, {
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/retirement`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -167,7 +167,7 @@ export default function Dashboard() {
           EMI: parseFloat(userData.monthlyEmi || userData.emi || 0)
         };
 
-        fetch(`${import.meta.env.VITE_API_BASE}/analyze/clusters`, {
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/analyze/clusters`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ expenses: expensePayload }),
@@ -192,7 +192,7 @@ export default function Dashboard() {
   // --- What-if Simulation ---
   const runSimulation = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE}/simulate`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
