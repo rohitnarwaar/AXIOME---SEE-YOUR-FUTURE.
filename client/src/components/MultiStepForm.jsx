@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import StepIncome from "./steps/StepIncome";
 import StepExpenses from "./steps/StepExpenses";
 import StepAssets from "./steps/StepAssets";
@@ -62,39 +63,64 @@ export default function MultiStepForm() {
   const back = () => setStep((prev) => Math.max(prev - 1, 0));
 
   return (
-    <div>
-      <div className="flex justify-between mb-6 gap-2 flex-wrap">
-        {steps.map((s, i) => (
-          <div
-            key={i}
-            className={`text-sm ${i === step ? "font-bold text-blue-600" : "text-gray-400"
+    <div className="min-h-screen bg-white px-[10%] py-12" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="max-w-3xl mx-auto"
+      >
+        {/* Step Indicator */}
+        <div className="flex justify-between mb-20 pb-6 border-b border-black/20">
+          {steps.map((s, i) => (
+            <div
+              key={i}
+              className="flex flex-col items-center gap-2"
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${i === step
+                  ? "bg-black text-white"
+                  : i < step
+                    ? "bg-black/20 text-black/60"
+                    : "bg-black/5 text-black/30"
+                }`}>
+                {i + 1}
+              </div>
+              <span className={`text-xs uppercase tracking-wide transition-opacity ${i === step ? "text-black font-medium" : "text-black/40"
+                }`}>
+                {s.title}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Step Content */}
+        <div className="mb-20">
+          <StepComponent formData={formData} updateForm={updateForm} errors={errors} />
+        </div>
+
+        {/* Navigation */}
+        <div className="flex justify-between items-center pt-8 border-t border-black/20">
+          <button
+            onClick={back}
+            disabled={step === 0}
+            className={`px-8 py-3 text-xs tracking-widest uppercase border-2 transition-all ${step === 0
+                ? "border-black/10 text-black/20 cursor-not-allowed"
+                : "border-black text-black hover:bg-black hover:text-white"
               }`}
           >
-            {s.title}
-          </div>
-        ))}
-      </div>
-
-      <StepComponent formData={formData} updateForm={updateForm} errors={errors} />
-
-      <div className="flex justify-between mt-6">
-        <button
-          onClick={back}
-          disabled={step === 0}
-          className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
-        >
-          Back
-        </button>
-
-        {step < steps.length - 1 ? (
-          <button
-            onClick={next}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
-          >
-            Next
+            Back
           </button>
-        ) : null}
-      </div>
+
+          {step < steps.length - 1 && (
+            <button
+              onClick={next}
+              className="px-8 py-3 text-xs tracking-widest uppercase bg-black text-white hover:opacity-80 transition-opacity"
+            >
+              Next
+            </button>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }

@@ -30,6 +30,40 @@ export function AuthProvider({ children }) {
         return signOut(auth);
     };
 
+    // Check if user has completed onboarding
+    const checkOnboardingStatus = async (userId) => {
+        try {
+            const { doc, getDoc } = await import('firebase/firestore');
+            const { db } = await import('../firebase');
+            const userDoc = await getDoc(doc(db, 'userProfiles', userId));
+            if (userDoc.exists()) {
+                return userDoc.data().hasCompletedOnboarding || false;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking onboarding status:', error);
+            return false;
+        }
+    };
+
+    // Mark onboarding as complete and save user data
+    const markOnboardingComplete = async (userId, formData) => {
+        try {
+            const { doc, setDoc } = await import('firebase/firestore');
+            const { db } = await import('../firebase');
+            await setDoc(doc(db, 'userProfiles', userId), {
+                ...formData,
+                hasCompletedOnboarding: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            return true;
+        } catch (error) {
+            console.error('Error marking onboarding complete:', error);
+            return false;
+        }
+    };
+
     // Listen for auth state changes
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -45,7 +79,9 @@ export function AuthProvider({ children }) {
         register,
         login,
         logout,
-        loading
+        loading,
+        checkOnboardingStatus,
+        markOnboardingComplete
     };
 
     return (
