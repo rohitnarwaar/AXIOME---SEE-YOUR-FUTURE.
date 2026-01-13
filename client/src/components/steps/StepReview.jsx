@@ -1,81 +1,86 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db } from "../../firebase";
-import { collection, addDoc } from "firebase/firestore";
-import analyzeFinance from "../../utils/analyzeFinance"; // ✅ Gemini helper
+import { motion } from "framer-motion";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function StepReview({ formData }) {
   const navigate = useNavigate();
+  const { currentUser, markOnboardingComplete } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
+    console.log("Submit button clicked");
+    console.log("Current user:", currentUser);
+    console.log("Form data:", formData);
+
     setLoading(true);
     setError("");
 
     // Save locally
     localStorage.setItem("lifeledgerFormData", JSON.stringify(formData));
+    console.log("Saved to localStorage");
 
     try {
-      // Sanitize data (Firestore doesn't like undefined)
-      const cleanData = JSON.parse(JSON.stringify(formData));
-
-      // Save to Firestore with timestamp
-      const docRef = await addDoc(collection(db, "users"), {
-        ...cleanData,
-        createdAt: new Date()
-      });
-
-      // ✅ Save User ID to LocalStorage for Dashboard retrieval
-      localStorage.setItem("lifeledgerUserId", docRef.id);
-
-      // Call Gemini for AI insights
-      // We wrap this in a separate try-catch so it doesn't block the flow if it fails
-      let aiResult = { summary: "AI analysis pending..." };
-      try {
-        aiResult = await analyzeFinance(cleanData);
-      } catch (aiErr) {
-        console.error("AI Analysis failed but continuing:", aiErr);
+      if (currentUser) {
+        console.log("Saving to Firestore for user:", currentUser.uid);
+        // Save to Firestore with user ID
+        const success = await markOnboardingComplete(currentUser.uid, formData);
+        console.log("Firestore save result:", success);
+        if (!success) {
+          throw new Error("Failed to save data to Firestore");
+        }
+        localStorage.setItem("lifeledgerUserId", currentUser.uid);
+      } else {
+        console.log("No current user, skipping Firestore save");
       }
 
-      // Save AI result also in Firestore
-      await addDoc(collection(db, "insights"), {
-        userId: docRef.id,
-        ...aiResult,
-        createdAt: new Date(),
-      });
-
       // Navigate to dashboard
+      console.log("Navigating to dashboard...");
       navigate("/dashboard");
     } catch (e) {
       console.error("❌ Error:", e);
       setError(`Failed to save: ${e.message}`);
+      setLoading(false);
+      // Still try to navigate even if save failed
+      setTimeout(() => {
+        console.log("Navigating to dashboard despite error...");
+        navigate("/dashboard");
+      }, 2000);
     }
-
-    setLoading(false);
   };
 
   const formattedEntries = Object.entries(formData).map(([key, value]) => (
-    <div key={key} className="flex justify-between border-b py-2">
-      <span className="capitalize">{key.replace(/([A-Z])/g, " $1")}</span>
-      <span className="font-medium">{value || "N/A"}</span>
+    <div key={key} className="flex justify-between py-3 border-b border-black/10">
+      <span className="text-xs uppercase tracking-wide text-black/70">
+        {key.replace(/([A-Z])/g, " $1")}
+      </span>
+      <span className="text-sm text-black">{value || "N/A"}</span>
     </div>
   ));
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-4">✅ Review Your Details</h2>
-      <div className="space-y-2">{formattedEntries}</div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      style={{ fontFamily: '"Source Code Pro", monospace' }}
+    >
+      <h2 className="text-xs tracking-widest uppercase mb-8 text-black/70">REVIEW YOUR DETAILS</h2>
 
-      {error && <p className="text-red-600 mt-2">{error}</p>}
+      <div className="mb-8 max-w-2xl">{formattedEntries}</div>
+
+      {error && (
+        <p className="text-red-600 text-xs mb-4 tracking-wide">{error}</p>
+      )}
 
       <button
         onClick={handleSubmit}
         disabled={loading}
-        className="mt-6 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+        className="px-8 py-3 bg-black text-white text-xs tracking-widest uppercase hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? "Submitting..." : "Submit & View Dashboard"}
       </button>
-    </div>
+    </motion.div>
   );
 }

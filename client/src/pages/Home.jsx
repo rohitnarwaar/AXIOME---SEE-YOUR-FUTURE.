@@ -7,11 +7,24 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const { scrollYProgress } = useScroll();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, checkOnboardingStatus } = useAuth();
   const navigate = useNavigate();
 
   const [activeStep, setActiveStep] = useState(0);
   const stepRefs = useRef([]);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (currentUser) {
+        const completed = await checkOnboardingStatus(currentUser.uid);
+        setHasCompletedOnboarding(completed);
+      }
+      setCheckingOnboarding(false);
+    };
+    checkStatus();
+  }, [currentUser, checkOnboardingStatus]);
 
   useEffect(() => {
     const observers = [];
@@ -128,12 +141,18 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="flex gap-8 text-sm tracking-wide"
+          className="flex gap-8 text-sm tracking-wide items-center"
           style={{ fontFamily: '"Source Code Pro", monospace' }}
         >
           {currentUser ? (
             <>
-              <Link to="/dashboard" className="hover:opacity-70 transition-opacity">Dashboard</Link>
+              {!checkingOnboarding && (
+                hasCompletedOnboarding ? (
+                  <Link to="/dashboard" className="hover:opacity-70 transition-opacity">Dashboard</Link>
+                ) : (
+                  <Link to="/onboarding" className="hover:opacity-70 transition-opacity">Complete Profile</Link>
+                )
+              )}
               <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">Logout</button>
             </>
           ) : (

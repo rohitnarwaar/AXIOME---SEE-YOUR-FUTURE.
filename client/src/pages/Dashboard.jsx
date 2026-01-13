@@ -1,72 +1,71 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import analyzeFinance from "../utils/analyzeFinance";
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { db } from "../firebase";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc, where } from "firebase/firestore";
-import { motion } from "framer-motion";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Dashboard() {
   const [formData, setFormData] = useState({});
   const [insights, setInsights] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const { currentUser, logout, checkOnboardingStatus } = useAuth();
+  const navigate = useNavigate();
 
-  // ... (state hooks same as before) ...
   const [forecastData, setForecastData] = useState([]);
   const [loanData, setLoanData] = useState([]);
   const [retirementData, setRetirementData] = useState([]);
   const [simulateData, setSimulateData] = useState({ base: [], bump: [] });
   const [deltaSavings, setDeltaSavings] = useState(5000);
-  const [spendingClusters, setSpendingClusters] = useState([]); // ✅ New State for Clusters
+  const [spendingClusters, setSpendingClusters] = useState([]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to log out:', error);
+    }
+  };
 
   useEffect(() => {
-    const fetchLatestUserData = async () => {
+    const fetchUserDataAndCheckOnboarding = async () => {
       setLoading(true);
       setError("");
+
       try {
-        const userId = localStorage.getItem("lifeledgerUserId");
-        let userData = null;
-
-        // 1. Try fetching from Firestore if ID is valid and not explicitly local
-        if (userId && !userId.startsWith("local_")) {
-          try {
-            const userDoc = await getDoc(doc(db, "users", userId));
-            if (userDoc.exists()) {
-              userData = userDoc.data();
-            }
-          } catch (err) {
-            console.warn("⚠️ Firestore fetch failed, trying local storage");
-          }
-        }
-
-        // 2. Fallback to LocalStorage
-        if (!userData) {
-          const localData = localStorage.getItem("lifeledgerFormData");
-          if (localData) {
-            userData = JSON.parse(localData);
-          }
-        }
-
-        // 3. Fallback to latest Firestore doc (Demo Mode only)
-        if (!userData) {
-          try {
-            const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(1));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-              userData = snapshot.docs[0].data();
-              localStorage.setItem("lifeledgerUserId", snapshot.docs[0].id);
-            }
-          } catch (err) { console.warn("Demo fetch failed"); }
-        }
-
-        if (!userData) {
-          setError("No user data found. Please fill the form.");
+        if (!currentUser) {
+          setError("Please log in to view your dashboard.");
           setLoading(false);
           return;
         }
 
+        // Check if user has completed onboarding
+        const completed = await checkOnboardingStatus(currentUser.uid);
+        setHasCompletedOnboarding(completed);
+
+        if (!completed) {
+          // User hasn't completed onboarding, show the form
+          setLoading(false);
+          return;
+        }
+
+        // User has completed onboarding, fetch their data
+        const userDoc = await getDoc(doc(db, "userProfiles", currentUser.uid));
+        if (!userDoc.exists()) {
+          setError("No user data found. Please complete the onboarding form.");
+          setHasCompletedOnboarding(false);
+          setLoading(false);
+          return;
+        }
+
+        const userData = userDoc.data();
         setFormData(userData);
 
         // --- Analyze with Gemini ---
@@ -157,7 +156,6 @@ export default function Dashboard() {
           .catch(() => setError("Failed to fetch retirement forecast."));
 
         // --- Spending Clusters ---
-        // Construct detailed expenses object from formData
         const expensePayload = {
           Rent: parseFloat(userData.rent || 0),
           Food: parseFloat(userData.food || 0),
@@ -186,8 +184,8 @@ export default function Dashboard() {
       }
     };
 
-    fetchLatestUserData();
-  }, []);
+    fetchUserDataAndCheckOnboarding();
+  }, [currentUser, checkOnboardingStatus]);
 
   // --- What-if Simulation ---
   const runSimulation = async () => {
@@ -219,154 +217,198 @@ export default function Dashboard() {
     }
   };
 
+  if (loading) return (
+    <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+      <p className="text-sm tracking-widest uppercase">Loading your financial universe...</p>
+    </div>
+  );
 
+  if (error && !formData.income) return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+      <p className="text-sm tracking-widest uppercase text-red-600 mb-4">{error}</p>
+      <button
+        onClick={() => navigate('/')}
+        className="px-6 py-2 border-2 border-black text-xs tracking-widest uppercase hover:bg-black hover:text-white transition-colors"
+      >
+        Go Home
+      </button>
+    </div>
+  );
 
-  // ... existing imports
+  // Show onboarding form if user hasn't completed it
+  if (!hasCompletedOnboarding) {
+    navigate('/onboarding');
+    return null;
+  }
 
-  if (loading) return <div className="h-screen flex items-center justify-center text-primary">Loading your financial universe...</div>;
-  if (error) return <div className="h-screen flex items-center justify-center text-red-500">{error}</div>;
-
+  // Show dashboard for users who have completed onboarding
   return (
-    <div className="min-h-screen bg-background text-gray-100 p-6 pt-32">
+    <div className="min-h-screen bg-white text-black">
+      {/* Navigation */}
+      <motion.nav
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="relative z-20 flex justify-between items-center py-6"
+        style={{
+          paddingLeft: '10%',
+          paddingRight: '10%',
+          fontFamily: '"Source Code Pro", monospace'
+        }}
+      >
+        <div className="text-sm tracking-widest">
+          ONE'S OWN
+        </div>
+
+        <div className="flex gap-8 text-sm tracking-wide">
+          <button onClick={() => navigate('/')} className="hover:opacity-70 transition-opacity">Home</button>
+          <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">Logout</button>
+        </div>
+      </motion.nav>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-7xl mx-auto space-y-8"
+        transition={{ duration: 0.8 }}
+        className="px-[10%] py-12"
+        style={{ fontFamily: '"Source Code Pro", monospace' }}
       >
-
         {/* Header */}
-        <header className="flex justify-between items-end mb-8">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent">
-              Financial Overview
-            </h1>
-            <p className="text-gray-400 mt-2">Welcome back. Here is your wealth trajectory.</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Net Worth Forecast</p>
-            <p className="text-2xl font-mono text-accent">
-              ₹{forecastData.length > 0 ? Math.round(forecastData[forecastData.length - 1].netWorth).toLocaleString() : "---"}
-            </p>
-          </div>
+        <header className="mb-16">
+          <h1 className="text-4xl font-light tracking-wide uppercase mb-4">
+            Financial Overview
+          </h1>
+          <p className="text-sm opacity-60 tracking-wide">
+            Welcome back. Here is your wealth trajectory.
+          </p>
         </header>
 
-        {/* Bento Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Horizontal Line Separator */}
+        <div className="h-px bg-black opacity-20 mb-16" />
 
-          {/* Main Chart - Savings */}
-          <div className="lg:col-span-2">
-            <div className="glass-panel p-6 rounded-2xl h-full">
-              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent"></span> Wealth Trajectory
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={forecastData}>
-                  <defs>
-                    <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="date" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
-                    itemStyle={{ color: '#fff' }}
-                  />
-                  <Area type="monotone" dataKey="netWorth" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorNetWorth)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* AI Insights Card */}
-          <div className="lg:col-span-1">
-            <div className="glass-panel p-6 rounded-2xl h-full flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] rounded-full pointer-events-none"></div>
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <span className="text-xl">✨</span> Advisor AI
-              </h3>
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-gray-300 text-sm leading-relaxed space-y-4">
-                {insights ? (
-                  <p className="whitespace-pre-line">{insights.summary}</p>
-                ) : (
-                  <div className="animate-pulse space-y-2">
-                    <div className="h-2 bg-gray-700 rounded w-3/4"></div>
-                    <div className="h-2 bg-gray-700 rounded w-full"></div>
-                    <div className="h-2 bg-gray-700 rounded w-5/6"></div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Loan Payoff */}
-          <div className="glass-panel p-6 rounded-2xl">
-            <h3 className="text-lg font-semibold mb-4 text-secondary">Debt Freedom</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={loanData}>
-                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none' }} />
-                <Line type="monotone" dataKey="remaining" stroke="#ec4899" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Retirement */}
-          <div className="glass-panel p-6 rounded-2xl">
-            <h3 className="text-lg font-semibold mb-4 text-primary">Retirement Corpus</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={retirementData}>
-                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none' }} />
-                <Line type="monotone" dataKey="corpus" stroke="#6366f1" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Spending Clusters */}
-          <div className="glass-panel p-6 rounded-2xl lg:col-span-1">
-            <h3 className="text-lg font-semibold mb-4 opacity-80">Spending Tiers</h3>
-            <div className="space-y-3">
-              {spendingClusters.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                  <div>
-                    <p className="text-sm text-gray-300">{item.category}</p>
-                    <p className={`text-xs ${item.cluster.includes("High") ? "text-red-400" : "text-green-400"
-                      }`}>{item.cluster}</p>
-                  </div>
-                  <span className="font-mono text-white">₹{item.amount}</span>
-                </div>
-              ))}
-              {spendingClusters.length === 0 && <p className="text-sm text-gray-500">No expense data to cluster.</p>}
-            </div>
-          </div>
-
+        {/* Net Worth Forecast */}
+        <div className="mb-16">
+          <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">NET WORTH FORECAST</h3>
+          <p className="text-3xl font-light mb-8">
+            ₹{forecastData.length > 0 ? Math.round(forecastData[forecastData.length - 1].netWorth).toLocaleString() : "---"}
+          </p>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={forecastData}>
+              <defs>
+                <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
+                  <stop offset="95%" stopColor="#000" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+              <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+              <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
+                itemStyle={{ color: '#000' }}
+              />
+              <Area type="monotone" dataKey="netWorth" stroke="#000" strokeWidth={2} fillOpacity={1} fill="url(#colorNetWorth)" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* What-if Simulation (Full Width) */}
-        <div className="glass-panel p-8 rounded-2xl">
-          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-            <div>
-              <h3 className="text-2xl font-bold">Simulator</h3>
-              <p className="text-gray-400 text-sm">See how saving more impacts your future.</p>
-            </div>
-            <div className="flex items-center gap-6 bg-black/30 p-4 rounded-xl border border-white/10">
-              <span className="text-sm text-gray-400">Save extra:</span>
-              <input
-                type="range"
-                min="1000"
-                max="50000"
-                step="1000"
-                value={deltaSavings}
-                onChange={(e) => setDeltaSavings(e.target.value)}
-                className="w-48 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accent"
-              />
-              <span className="font-mono text-accent text-lg">+₹{parseInt(deltaSavings).toLocaleString()}</span>
-              <button onClick={runSimulation} className="bg-accent text-black px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-opacity">
-                Run
-              </button>
-            </div>
+        {/* Horizontal Line Separator */}
+        <div className="h-px bg-black opacity-20 mb-16" />
+
+        {/* AI Insights */}
+        <div className="mb-16">
+          <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">ADVISOR AI</h3>
+          <div className="text-sm leading-relaxed opacity-80 max-w-3xl">
+            {insights ? (
+              <p className="whitespace-pre-line">{insights.summary}</p>
+            ) : (
+              <p className="opacity-50">Analyzing your financial data...</p>
+            )}
+          </div>
+        </div>
+
+        {/* Horizontal Line Separator */}
+        <div className="h-px bg-black opacity-20 mb-16" />
+
+        {/* Charts Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 mb-16">
+          {/* Debt Freedom */}
+          <div>
+            <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">DEBT FREEDOM</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={loanData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                <Line type="monotone" dataKey="remaining" stroke="#000" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Retirement Corpus */}
+          <div>
+            <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">RETIREMENT CORPUS</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={retirementData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                <Line type="monotone" dataKey="corpus" stroke="#000" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Horizontal Line Separator */}
+        <div className="h-px bg-black opacity-20 mb-16" />
+
+        {/* Spending Tiers */}
+        <div className="mb-16">
+          <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">SPENDING TIERS</h3>
+          <div className="space-y-4 max-w-2xl">
+            {spendingClusters.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center py-3 border-b border-black/10">
+                <div>
+                  <p className="text-sm uppercase tracking-wide">{item.category}</p>
+                  <p className="text-xs opacity-50 mt-1">{item.cluster}</p>
+                </div>
+                <span className="text-sm">₹{item.amount}</span>
+              </div>
+            ))}
+            {spendingClusters.length === 0 && <p className="text-sm opacity-50">No expense data to cluster.</p>}
+          </div>
+        </div>
+
+        {/* Horizontal Line Separator */}
+        <div className="h-px bg-black opacity-20 mb-16" />
+
+        {/* What-if Simulator */}
+        <div className="mb-16">
+          <div className="mb-8">
+            <h3 className="text-xs tracking-widest uppercase mb-4 opacity-60">SIMULATOR</h3>
+            <p className="text-sm opacity-60">See how saving more impacts your future.</p>
+          </div>
+
+          <div className="flex items-center gap-6 mb-8">
+            <span className="text-xs tracking-wide opacity-60">SAVE EXTRA:</span>
+            <input
+              type="range"
+              min="1000"
+              max="50000"
+              step="1000"
+              value={deltaSavings}
+              onChange={(e) => setDeltaSavings(e.target.value)}
+              className="w-48 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-black"
+            />
+            <span className="text-sm">+₹{parseInt(deltaSavings).toLocaleString()}</span>
+            <button
+              onClick={runSimulation}
+              className="px-6 py-2 border border-black text-xs tracking-widest uppercase hover:bg-black hover:text-white transition-colors"
+            >
+              Run
+            </button>
           </div>
 
           {simulateData.base.length > 0 && (
@@ -374,23 +416,22 @@ export default function Dashboard() {
               <AreaChart>
                 <defs>
                   <linearGradient id="colorBump" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#000" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                <XAxis dataKey="date" stroke="#666" />
-                <YAxis stroke="#666" />
-                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
                 <Legend />
-                <Area type="monotone" dataKey="value" data={simulateData.base} name="Current Path" stroke="#666" fill="transparent" strokeDasharray="5 5" />
-                <Area type="monotone" dataKey="value" data={simulateData.bump} name="With Extra Savings" stroke="#10b981" fill="url(#colorBump)" strokeWidth={2} />
+                <Area type="monotone" dataKey="value" data={simulateData.base} name="Current Path" stroke="#999" fill="transparent" strokeDasharray="5 5" />
+                <Area type="monotone" dataKey="value" data={simulateData.bump} name="With Extra Savings" stroke="#000" fill="url(#colorBump)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </div>
-
       </motion.div>
-    </div >
+    </div>
   );
 }

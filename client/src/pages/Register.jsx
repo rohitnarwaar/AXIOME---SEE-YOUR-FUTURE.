@@ -28,7 +28,7 @@ export default function Register() {
             setError('');
             setLoading(true);
             await register(email, password);
-            navigate('/dashboard');
+            navigate('/');
         } catch (err) {
             if (err.code === 'auth/email-already-in-use') {
                 setError('Email already in use');

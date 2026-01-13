@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import InputPage from "./pages/InputPage";
@@ -7,19 +7,20 @@ import UploadPage from "./pages/UploadPage";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Navbar from "./components/Navbar";
+import Onboarding from "./pages/Onboarding";
 
 function AppContent() {
-  const location = useLocation();
-  const showNavbar = location.pathname !== '/' && location.pathname !== '/login' && location.pathname !== '/register';
-
   return (
     <>
-      {showNavbar && <Navbar />}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/onboarding" element={
+          <ProtectedRoute>
+            <Onboarding />
+          </ProtectedRoute>
+        } />
         <Route path="/input" element={
           <ProtectedRoute>
             <InputPage />
