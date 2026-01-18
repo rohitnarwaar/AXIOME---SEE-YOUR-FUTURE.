@@ -298,15 +298,15 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="px-[10%] py-12"
+        className="px-4 md:px-[10%] py-12" // Responsive padding
         style={{ fontFamily: '"Source Code Pro", monospace' }}
       >
         {/* Header */}
         <header className="mb-16">
-          <h1 className="text-4xl font-light tracking-wide uppercase mb-4">
+          <h1 className="text-3xl md:text-4xl font-light tracking-wide uppercase mb-4">
             Financial Overview
           </h1>
-          <p className="text-sm opacity-60 tracking-wide">
+          <p className="text-xs md:text-sm opacity-60 tracking-wide">
             Welcome back. Here is your wealth trajectory.
           </p>
         </header>
@@ -317,27 +317,29 @@ export default function Dashboard() {
         {/* Net Worth Forecast */}
         <div className="mb-16" id="net-worth">
           <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">NET WORTH FORECAST</h3>
-          <p className="text-3xl font-light mb-8">
+          <p className="text-2xl md:text-3xl font-light mb-8">
             ₹{forecastData.length > 0 ? Math.round(forecastData[forecastData.length - 1].netWorth).toLocaleString() : "---"}
           </p>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={forecastData}>
-              <defs>
-                <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#000" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-              <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
-                itemStyle={{ color: '#000' }}
-              />
-              <Area type="monotone" dataKey="netWorth" stroke="#000" strokeWidth={2} fillOpacity={1} fill="url(#colorNetWorth)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="h-[250px] md:h-[300px]"> {/* Responsive height */}
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={forecastData}>
+                <defs>
+                  <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#000" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
+                  itemStyle={{ color: '#000' }}
+                />
+                <Area type="monotone" dataKey="netWorth" stroke="#000" strokeWidth={2} fillOpacity={1} fill="url(#colorNetWorth)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Horizontal Line Separator */}
@@ -358,34 +360,38 @@ export default function Dashboard() {
         {/* Horizontal Line Separator */}
         <div className="h-px bg-black opacity-20 mb-16" />
 
-        {/* Charts Grid */}
+        {/* Charts Grid - Stack on mobile */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-16 mb-16">
           {/* Debt Freedom */}
           <div id="debt">
             <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">DEBT FREEDOM</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={loanData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
-                <Line type="monotone" dataKey="remaining" stroke="#000" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={loanData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                  <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                  <Line type="monotone" dataKey="remaining" stroke="#000" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Retirement Corpus */}
           <div id="retirement">
             <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">RETIREMENT CORPUS</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={retirementData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
-                <Line type="monotone" dataKey="corpus" stroke="#000" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={retirementData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                  <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                  <Line type="monotone" dataKey="corpus" stroke="#000" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
@@ -399,10 +405,10 @@ export default function Dashboard() {
             {spendingClusters.map((item, idx) => (
               <div key={idx} className="flex justify-between items-center py-3 border-b border-black/10">
                 <div>
-                  <p className="text-sm uppercase tracking-wide">{item.category}</p>
-                  <p className="text-xs opacity-50 mt-1">{item.cluster}</p>
+                  <p className="text-xs md:text-sm uppercase tracking-wide">{item.category}</p>
+                  <p className="text-[10px] md:text-xs opacity-50 mt-1">{item.cluster}</p>
                 </div>
-                <span className="text-sm">₹{item.amount}</span>
+                <span className="text-xs md:text-sm">₹{item.amount}</span>
               </div>
             ))}
             {spendingClusters.length === 0 && <p className="text-sm opacity-50">No expense data to cluster.</p>}
