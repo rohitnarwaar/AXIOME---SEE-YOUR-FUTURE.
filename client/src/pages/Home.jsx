@@ -284,19 +284,19 @@ export default function Home() {
 
             <div className="space-y-24" style={{ fontFamily: '"Source Code Pro", monospace' }}>
               {[
-                { date: '01  /  I', city: 'Present State Model', desc: 'Baseline financial reality.' },
-                { date: '02  /  II', city: 'Income & Expense Structure', desc: 'Categorized inflows & outflows.' },
-                { date: '03  /  III', city: 'Cash Flow Patterns', desc: 'Timing & liquidity analysis.' },
-                { date: '04  /  IV', city: 'Savings Forecast', desc: 'Projected accumulation curves.' },
-                { date: '05  /  V', city: 'Spending Behaviour Signals', desc: 'Habitual anomalies detected.' },
-                { date: '06  /  VI', city: 'Risk Indicators', desc: 'Volatility & exposure stress-tests.' },
-                { date: '07  /  VII', city: 'Short-Term Outlook', desc: '3-12 month liquidity horizon.' },
-                { date: '08  /  VIII', city: 'Long-Term Projections', desc: 'Multi-decade compound trajectories.' },
-                { date: '09  /  IX', city: 'Loan Payoff Path', desc: 'Debt extinction timeline.' },
-                { date: '10  /  X', city: 'Retirement Projection', desc: 'Post-work sustainability model.' },
-                { date: '11  /  XI', city: 'Net Worth Trajectory', desc: 'Total asset evolution.' },
-                { date: '12  /  XII', city: 'What-If Scenarios', desc: 'Alternative reality simulation.' },
-                { date: '13  /  XIII', city: 'Decision Notes', desc: 'Synthesized actionable intelligence.' }
+                { date: '01  /  I', city: 'Present State Model', desc: 'Baseline financial reality.', target: 'net-worth' },
+                { date: '02  /  II', city: 'Income & Expense Structure', desc: 'Categorized inflows & outflows.', target: 'spending-tiers' },
+                { date: '03  /  III', city: 'Cash Flow Patterns', desc: 'Timing & liquidity analysis.', target: 'net-worth' },
+                { date: '04  /  IV', city: 'Savings Forecast', desc: 'Projected accumulation curves.', target: 'net-worth' },
+                { date: '05  /  V', city: 'Spending Behaviour Signals', desc: 'Habitual anomalies detected.', target: 'spending-tiers' },
+                { date: '06  /  VI', city: 'Risk Indicators', desc: 'Volatility & exposure stress-tests.', target: 'ai-advisor' },
+                { date: '07  /  VII', city: 'Short-Term Outlook', desc: '3-12 month liquidity horizon.', target: 'net-worth' },
+                { date: '08  /  VIII', city: 'Long-Term Projections', desc: 'Multi-decade compound trajectories.', target: 'retirement' },
+                { date: '09  /  IX', city: 'Loan Payoff Path', desc: 'Debt extinction timeline.', target: 'debt' },
+                { date: '10  /  X', city: 'Retirement Projection', desc: 'Post-work sustainability model.', target: 'retirement' },
+                { date: '11  /  XI', city: 'Net Worth Trajectory', desc: 'Total asset evolution.', target: 'net-worth' },
+                { date: '12  /  XII', city: 'What-If Scenarios', desc: 'Alternative reality simulation.', target: 'simulator' },
+                { date: '13  /  XIII', city: 'Decision Notes', desc: 'Synthesized actionable intelligence.', target: 'ai-advisor' }
               ].map((show, index) => (
                 <div
                   key={index}
@@ -307,7 +307,19 @@ export default function Home() {
                     <span className="text-xs tracking-widest opacity-50">{show.date}</span>
                     <span className="text-xl font-light">{show.city}</span>
                     <p className="text-sm opacity-60 max-w-xs leading-relaxed">{show.desc}</p>
-                    <a href="#" className="text-xs hover:opacity-70 transition-opacity mt-2 block">View Analysis →</a>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentUser) {
+                          navigate(`/dashboard#${show.target}`);
+                        } else {
+                          navigate('/login');
+                        }
+                      }}
+                      className="text-left text-xs hover:opacity-70 transition-opacity mt-2 block underline decoration-1 underline-offset-4"
+                    >
+                      View Analysis →
+                    </button>
                   </div>
                 </div>
               ))}

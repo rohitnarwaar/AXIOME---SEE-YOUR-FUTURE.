@@ -247,6 +247,20 @@ export default function Dashboard() {
     </div>
   );
 
+
+  // --- Auto-scroll to section based on hash ---
+  useEffect(() => {
+    if (window.location.hash) {
+      const id = window.location.hash.replace("#", "");
+      const element = document.getElementById(id);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 500); // Small delay to allow rendering
+      }
+    }
+  }, [loading]); // Run after loading is done
+
   // Show onboarding form if user hasn't completed it
   if (!hasCompletedOnboarding) {
     navigate('/onboarding');
@@ -299,7 +313,7 @@ export default function Dashboard() {
         <div className="h-px bg-black opacity-20 mb-16" />
 
         {/* Net Worth Forecast */}
-        <div className="mb-16">
+        <div className="mb-16" id="net-worth">
           <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">NET WORTH FORECAST</h3>
           <p className="text-3xl font-light mb-8">
             ₹{forecastData.length > 0 ? Math.round(forecastData[forecastData.length - 1].netWorth).toLocaleString() : "---"}
@@ -328,7 +342,7 @@ export default function Dashboard() {
         <div className="h-px bg-black opacity-20 mb-16" />
 
         {/* AI Insights */}
-        <div className="mb-16">
+        <div className="mb-16" id="ai-advisor">
           <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">ADVISOR AI</h3>
           <div className="text-sm leading-relaxed opacity-80 max-w-3xl">
             {insights ? (
@@ -345,7 +359,7 @@ export default function Dashboard() {
         {/* Charts Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-16 mb-16">
           {/* Debt Freedom */}
-          <div>
+          <div id="debt">
             <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">DEBT FREEDOM</h3>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={loanData}>
@@ -359,7 +373,7 @@ export default function Dashboard() {
           </div>
 
           {/* Retirement Corpus */}
-          <div>
+          <div id="retirement">
             <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">RETIREMENT CORPUS</h3>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={retirementData}>
@@ -377,7 +391,7 @@ export default function Dashboard() {
         <div className="h-px bg-black opacity-20 mb-16" />
 
         {/* Spending Tiers */}
-        <div className="mb-16">
+        <div className="mb-16" id="spending-tiers">
           <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">SPENDING TIERS</h3>
           <div className="space-y-4 max-w-2xl">
             {spendingClusters.map((item, idx) => (
@@ -397,9 +411,10 @@ export default function Dashboard() {
         <div className="h-px bg-black opacity-20 mb-16" />
 
         {/* What-if Simulator */}
-        <div className="mb-16">
+        <div className="mb-16" id="simulator">
           <div className="mb-8">
             <h3 className="text-xs tracking-widest uppercase mb-4 opacity-60">SIMULATOR</h3>
+
             <p className="text-sm opacity-60">See how saving more impacts your future.</p>
           </div>
 
