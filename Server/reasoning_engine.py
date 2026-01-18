@@ -1,10 +1,7 @@
 import random
 
 def analyze_portfolio(data):
-    """
-    Acts as a local 'Expert System' to analyze financial data.
-    Returns a narrative summary based on financial health indicators.
-    """
+
     
     # 1. Parse Data
     try:
@@ -68,5 +65,17 @@ def analyze_portfolio(data):
         checklist.append("- Look for opportunities to increase your primary income stream.")
 
     narrative.append("\n".join(checklist))
+
+    # 6. Personality Injection (New Layer)
+    intro = ""
+    if age < 30:
+        intro = f"Strategy Mode: AGGRESSIVE GROWTH (Age {age})\nTime is your biggest asset. Your focus should be on maximizing income and high-growth investments."
+    elif age < 50:
+        intro = f"Strategy Mode: BALANCED COMPOUNDING (Age {age})\nYou are in your prime earning years. The goal is to balance lifestyle needs with debt reduction and consistent investing."
+    else:
+        intro = f"Strategy Mode: WEALTH PRESERVATION (Age {age})\nSecurity is paramount. Your focus shifts from high risk to capital protection and liquidity for retirement."
+
+    # Prepend intro to narrative
+    narrative.insert(0, intro)
 
     return "\n\n".join(narrative)
