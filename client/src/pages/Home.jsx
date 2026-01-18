@@ -184,7 +184,7 @@ export default function Home() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1.2, delay: 0.3 }}
-            className="w-full text-[4rem] sm:text-[6rem] md:text-[8rem] lg:text-[10rem] xl:text-[12rem] 2xl:text-[14rem] font-bold tracking-tight leading-none text-center"
+            className="w-full text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem] xl:text-[14rem] font-bold tracking-tight leading-none text-center"
             style={{
               WebkitTextStroke: '2px',
               WebkitTextStrokeColor: textColor,
@@ -203,7 +203,7 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.8 }}
         className="absolute z-50"
-        style={{ bottom: '64px', left: '5%', color: textColor }} // Mobile: 5% left
+        style={{ bottom: '64px', left: '15%', color: textColor }}
       >
         <p className="text-xs tracking-widest mb-1 font-light">COMPOSED OF:</p>
         <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
@@ -218,20 +218,17 @@ export default function Home() {
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: false, amount: 0.3 }}
-          className="space-y-2 max-w-2xl px-6 md:px-0" // Add padding on mobile
-          style={{ marginLeft: '5%', marginRight: '5%', mdMarginLeft: '15%', color: textColor }} // Use CSS for responsive logic or just minimize fixed margins
+          className="space-y-2 max-w-2xl"
+          style={{ marginLeft: '15%', color: textColor }}
         >
-          {/* Note: In React inline styles don't support media queries easily. Better to use Tailwind classes for layout structure */}
-          <div className="md:ml-[15%] ml-[5%] md:w-auto w-[90%]"> {/* Wrapper for responsive margin */}
-            <h3 className="text-xs tracking-widest font-light uppercase">INFO</h3>
-            <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
-              AXIOMÉ(ax-i-oh-may)is a personal system for modeling the present and reasoning about the future.
-            </p>
-            <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
-              It brings together fragmented financial signals into a coherent structure — allowing patterns, risks, and possibilities to surface over time. Rather than recording what has already happened, AXIOMÉ focuses on exploring what could happen, and why.<br />
-              Designed as a thinking companion, the system helps individuals understand consequences before decisions are made, offering clarity without noise and foresight without prescription.
-            </p>
-          </div>
+          <h3 className="text-xs tracking-widest font-light uppercase">INFO</h3>
+          <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+            AXIOMÉ(ax-i-oh-may)is a personal system for modeling the present and reasoning about the future.
+          </p>
+          <p className="text-sm leading-relaxed" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+            It brings together fragmented financial signals into a coherent structure — allowing patterns, risks, and possibilities to surface over time. Rather than recording what has already happened, AXIOMÉ focuses on exploring what could happen, and why.<br />
+            Designed as a thinking companion, the system helps individuals understand consequences before decisions are made, offering clarity without noise and foresight without prescription.
+          </p>
         </motion.div>
 
         {/* Horizontal Line Separator */}
@@ -242,8 +239,8 @@ export default function Home() {
           viewport={{ once: false }}
           className="h-px mt-16 mb-16"
           style={{
-            width: '90%', // 90% width on mobile
-            marginLeft: '5%',
+            width: '70%',
+            marginLeft: '15%',
             backgroundColor: textColor,
             opacity: 0.3,
             transformOrigin: 'left'
@@ -251,17 +248,17 @@ export default function Home() {
         />
 
         {/* Models & Scenarios Section */}
-        <motion.div className="flex flex-col md:flex-row gap-16 items-start pb-40 relative px-6 md:px-[15%]" style={{ color: textColor }}>
+        <motion.div className="flex gap-16 items-start pb-40 relative" style={{ marginLeft: '15%', marginRight: '15%', color: textColor }}>
 
-          {/* Sticky Visual Lens - Hidden on small mobile or stacked */}
+          {/* Sticky Visual Lens */}
           <motion.div
-            className="md:sticky md:top-0 w-full md:w-1/2 h-[50vh] md:h-screen flex flex-col items-center justify-center"
+            className="sticky top-0 w-1/2 h-screen flex flex-col items-center justify-center"
             style={{ color: textColor }}
           >
             <h3 className="text-sm tracking-widest mb-12 font-light text-center z-10" style={{ fontFamily: '"Source Code Pro", monospace' }}>
               MODELS & SCENARIOS
             </h3>
-            <div className="relative w-[300px] h-[300px] md:w-[400px] md:h-[400px] rounded-full overflow-hidden border border-white/10">
+            <div className="relative w-[400px] h-[400px] rounded-full overflow-hidden border border-white/10">
               <motion.img
                 src={CircleImage}
                 alt="Trajectory Lens"
@@ -271,15 +268,17 @@ export default function Home() {
                   filter: `blur(${visualState.blur}px) brightness(${visualState.brightness})`,
                   rotate: visualState.rotate
                 }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
+                transition={{ duration: 1.5, ease: "easeInOut" }} // Slow, non-reactive
               />
+
+              {/* Optional overlay for extra atmosphere */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
             </div>
           </motion.div>
 
           {/* Scrollable Content List */}
           <motion.div
-            className="w-full md:w-1/2 pt-[5vh] md:pt-[10vh] pb-[10vh] md:pl-12"
+            className="w-1/2 pt-[10vh] pb-[10vh] pl-12"
             style={{ color: textColor }}
           >
 
