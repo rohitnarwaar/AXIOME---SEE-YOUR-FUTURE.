@@ -2,7 +2,6 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from groq import Groq
 
 from forecast_module import (
     forecast_savings,
@@ -12,10 +11,7 @@ from forecast_module import (
 )
 
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-print("✅ GROQ_API_KEY loaded:", bool(GROQ_API_KEY))
 
-client = Groq(api_key=GROQ_API_KEY)
 
 
 
@@ -123,36 +119,13 @@ def clusters_route():
 @app.route("/analyze", methods=["POST"])
 def analyze_route():
     try:
-        if not GROQ_API_KEY:
-            return jsonify({"error": "GROQ_API_KEY not set"}), 500
-
         data = request.get_json(force=True) or {}
         context = data.get("context", {})
-
-        prompt = f"""
-You are a personal finance advisor.
-
-Analyze the user's financial data below and provide:
-- Net worth analysis
-- Budget feedback
-- Debt advice
-- Short actionable checklist (max 5 bullets)
-
-User Data:
-{context}
-"""
-
-        completion = client.chat.completions.create(
-            model="mixtral-8x7b-32768",
-            messages=[
-                {"role": "system", "content": "You are a helpful financial advisor."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.6,
-            max_tokens=500
-        )
-
-        summary = completion.choices[0].message.content
+        
+        # Use local logic engine
+        from reasoning_engine import analyze_portfolio
+        summary = analyze_portfolio(context)
+        
         return jsonify({"summary": summary}), 200
 
     except Exception as e:
