@@ -199,6 +199,19 @@ export default function Dashboard() {
     fetchUserDataAndCheckOnboarding();
   }, [currentUser, checkOnboardingStatus]);
 
+  // --- Auto-scroll to section based on hash ---
+  useEffect(() => {
+    if (!loading && window.location.hash) {
+      const id = window.location.hash.replace("#", "");
+      const element = document.getElementById(id);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 500);
+      }
+    }
+  }, [loading]);
+
   // --- What-if Simulation ---
   const runSimulation = async () => {
     try {
@@ -248,18 +261,7 @@ export default function Dashboard() {
   );
 
 
-  // --- Auto-scroll to section based on hash ---
-  useEffect(() => {
-    if (window.location.hash) {
-      const id = window.location.hash.replace("#", "");
-      const element = document.getElementById(id);
-      if (element) {
-        setTimeout(() => {
-          element.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 500); // Small delay to allow rendering
-      }
-    }
-  }, [loading]); // Run after loading is done
+
 
   // Show onboarding form if user hasn't completed it
   if (!hasCompletedOnboarding) {
