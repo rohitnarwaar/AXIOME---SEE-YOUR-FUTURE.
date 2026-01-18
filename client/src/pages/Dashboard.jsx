@@ -81,27 +81,38 @@ export default function Dashboard() {
           parseFloat(userData.utilities || 0) +
           parseFloat(userData.misc || 0);
 
-        const savings = income - expenses;
-
         // --- Savings forecast ---
-        if (savings > 0) {
-          fetch(`${import.meta.env.VITE_API_BASE_URL}/forecast`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ monthlySaving: savings, months: 120 }),
+        let savings = income - expenses;
+        const initialSavings = parseFloat(userData.savings || 0);
+
+        // API requires non-negative monthly saving usually, but let's send what we have
+        // If savings is negative, the backend might reject it with 400.
+        // We should treat negative savings as 0 for "growth" forecast or handle debt logic.
+        // For now, let's clamp valid input to avoid 400 crash.
+        const effectiveMonthlySaving = Math.max(0, savings);
+
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/forecast`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            monthlySaving: effectiveMonthlySaving,
+            months: 120
+          }),
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error("Forecast API error " + res.status);
+            return res.json();
           })
-            .then((res) => res.json())
-            .then((data) => {
-              const series = data.series || data;
-              setForecastData(
-                series.map((d) => ({
-                  date: d.ds?.slice(0, 10),
-                  netWorth: parseFloat(d.yhat || 0),
-                }))
-              );
-            })
-            .catch(() => setError("Failed to fetch forecast data."));
-        }
+          .then((data) => {
+            const series = data.series || data;
+            setForecastData(
+              series.map((d) => ({
+                date: d.ds?.slice(0, 10),
+                netWorth: parseFloat(d.yhat || 0),
+              }))
+            );
+          })
+          .catch((err) => console.error("Forecast fetch failed:", err));
 
         // --- Loan payoff ---
         const loanAmount = parseFloat(userData.loanAmount || 0);
@@ -131,14 +142,15 @@ export default function Dashboard() {
         }
 
         // --- Retirement corpus ---
-        const currentSavings = parseFloat(userData.currentSavings || savings * 12);
+        const currentSavings = parseFloat(userData.currentSavings || initialSavings);
         const monthlyContribution = parseFloat(userData.monthlyContribution || savings);
+
         fetch(`${import.meta.env.VITE_API_BASE_URL}/retirement`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             currentSavings,
-            monthlyContribution,
+            monthlyContribution: Math.max(0, monthlyContribution),
             annualReturnRate: 0.08,
             months: 360,
           }),
@@ -153,7 +165,7 @@ export default function Dashboard() {
               }))
             );
           })
-          .catch(() => setError("Failed to fetch retirement forecast."));
+          .catch(() => console.log("Retirement fetch skipped or failed"));
 
         // --- Spending Clusters ---
         const expensePayload = {
@@ -320,7 +332,7 @@ export default function Dashboard() {
           <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">ADVISOR AI</h3>
           <div className="text-sm leading-relaxed opacity-80 max-w-3xl">
             {insights ? (
-              <p className="whitespace-pre-line">{insights.summary}</p>
+              <p className="whitespace-pre-line">{insights.aiSummary}</p>
             ) : (
               <p className="opacity-50">Analyzing your financial data...</p>
             )}
