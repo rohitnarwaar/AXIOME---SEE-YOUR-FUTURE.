@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [forecastData, setForecastData] = useState([]);
   const [loanData, setLoanData] = useState([]);
   const [retirementData, setRetirementData] = useState([]);
-  const [simulateData, setSimulateData] = useState({ base: [], bump: [] });
+  const [simulateData, setSimulateData] = useState([]);
   const [deltaSavings, setDeltaSavings] = useState(5000);
   const [spendingClusters, setSpendingClusters] = useState([]);
 
@@ -214,15 +214,15 @@ export default function Dashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Simulation failed");
 
-      const base = (data.base || []).map((d) => ({
-        date: d.ds?.slice(0, 10),
-        value: parseFloat(d.yhat),
-      }));
-      const bump = (data.bump || []).map((d) => ({
-        date: d.ds?.slice(0, 10),
-        value: parseFloat(d.yhat),
-      }));
-      setSimulateData({ base, bump });
+      const mergedData = (data.base || []).map((item, index) => {
+        const bumpItem = (data.bump || [])[index] || {};
+        return {
+          date: item.ds?.slice(0, 10),
+          baseValue: parseFloat(item.yhat),
+          bumpValue: parseFloat(bumpItem.yhat)
+        };
+      });
+      setSimulateData(mergedData);
     } catch (e) {
       console.error(e);
       setError("Simulation failed.");
@@ -423,9 +423,9 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {simulateData.base.length > 0 && (
+          {simulateData.length > 0 && (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart>
+              <AreaChart data={simulateData}>
                 <defs>
                   <linearGradient id="colorBump" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
@@ -437,8 +437,8 @@ export default function Dashboard() {
                 <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
                 <Legend />
-                <Area type="monotone" dataKey="value" data={simulateData.base} name="Current Path" stroke="#999" fill="transparent" strokeDasharray="5 5" />
-                <Area type="monotone" dataKey="value" data={simulateData.bump} name="With Extra Savings" stroke="#000" fill="url(#colorBump)" strokeWidth={2} />
+                <Area type="monotone" dataKey="baseValue" name="Current Path" stroke="#999" fill="transparent" strokeDasharray="5 5" />
+                <Area type="monotone" dataKey="bumpValue" name="With Extra Savings" stroke="#000" fill="url(#colorBump)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           )}
