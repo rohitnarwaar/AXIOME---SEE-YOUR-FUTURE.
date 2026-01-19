@@ -1,4 +1,4 @@
-# ONE'S OWN / LifeLedger 🚀
+# ONE'S OWN / AXIOMÉ 🚀
 
 **AI-Powered Financial Forecasting & Wealth Management**
 
