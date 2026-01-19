@@ -5,14 +5,26 @@ def analyze_portfolio(data):
     
     # 1. Parse Data
     try:
-        income = float(data.get('income', 0))
-        expenses = (
-            float(data.get('rent', 0)) + 
-            float(data.get('food', 0)) + 
-            float(data.get('transport', 0)) + 
-            float(data.get('utilities', 0)) + 
-            float(data.get('misc', 0))
-        )
+        # Check for real-time overrides
+        real_income = data.get('real_income')
+        real_expenses = data.get('real_expenses')
+
+        if real_income is not None:
+            income = float(real_income)
+        else:
+            income = float(data.get('income', 0))
+
+        if real_expenses is not None:
+            expenses = float(real_expenses)
+        else:
+            expenses = (
+                float(data.get('rent', 0)) + 
+                float(data.get('food', 0)) + 
+                float(data.get('transport', 0)) + 
+                float(data.get('utilities', 0)) + 
+                float(data.get('misc', 0))
+            )
+
         assets = float(data.get('savings', 0)) + float(data.get('fd', 0)) + float(data.get('stocks', 0))
         liabilities = float(data.get('loanAmount', 0)) + float(data.get('creditCardDebt', 0))
         age = int(data.get('age', 30))
