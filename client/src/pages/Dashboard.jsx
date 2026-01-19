@@ -290,6 +290,7 @@ export default function Dashboard() {
 
                 <div className="flex gap-8 text-sm tracking-wide">
                     <button onClick={() => navigate('/')} className="hover:opacity-70 transition-opacity">Home</button>
+                    <button onClick={() => navigate('/upload')} className="hover:opacity-70 transition-opacity">Upload</button>
                     <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">Logout</button>
                 </div>
             </motion.nav>
