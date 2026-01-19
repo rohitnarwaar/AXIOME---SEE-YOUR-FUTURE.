@@ -6,8 +6,19 @@ import {
     LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { db } from "../firebase";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
+
+// Daily-use feature components
+import DailyScoreWidget from "../components/DailyScoreWidget";
+import TodaySummaryWidget from "../components/TodaySummaryWidget";
+import QuickAddTransaction from "../components/QuickAddTransaction";
+import RecentTransactions from "../components/RecentTransactions";
+import GoalsWidget from "../components/GoalsWidget";
+import StreaksWidget from "../components/StreaksWidget";
+import AchievementsWidget from "../components/AchievementsWidget";
+import DailyTipWidget from "../components/DailyTipWidget";
+import BudgetWidget from "../components/BudgetWidget";
 
 export default function Dashboard() {
     const [formData, setFormData] = useState({});
@@ -25,6 +36,17 @@ export default function Dashboard() {
     const [deltaSavings, setDeltaSavings] = useState(5000);
     const [spendingClusters, setSpendingClusters] = useState([]);
 
+    // Daily-use feature state
+    const [transactions, setTransactions] = useState([]);
+    const [goals, setGoals] = useState([]);
+    const [streaks, setStreaks] = useState(null);
+    const [achievements, setAchievements] = useState([]);
+    const [dailyInsights, setDailyInsights] = useState(null);
+    const [budgetLimit, setBudgetLimit] = useState(0);
+    const [monthlySpent, setMonthlySpent] = useState(0);
+    const [monthlyIncome, setMonthlyIncome] = useState(0);
+    const [showAddTransaction, setShowAddTransaction] = useState(false);
+
     const handleLogout = async () => {
         try {
             await logout();
@@ -34,8 +56,90 @@ export default function Dashboard() {
         }
     };
 
+    // --- Firestore Real-time Listeners ---
+    useEffect(() => {
+        if (!currentUser?.uid) return;
+
+        // 1. Transactions Listener
+        const qTransactions = query(
+            collection(db, "users", currentUser.uid, "transactions"),
+            orderBy("date", "desc")
+        );
+        const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
+            const txns = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setTransactions(txns);
+        }, (error) => {
+            console.error("Error fetching transactions:", error);
+        });
+
+        // 2. Goals Listener
+        const qGoals = query(
+            collection(db, "users", currentUser.uid, "goals"),
+            orderBy("createdAt", "desc")
+        );
+        const unsubscribeGoals = onSnapshot(qGoals, (snapshot) => {
+            const goalsData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setGoals(goalsData);
+        }, (error) => {
+            console.error("Error fetching goals:", error);
+        });
+
+        return () => {
+            unsubscribeTransactions();
+            unsubscribeGoals();
+        };
+    }, [currentUser]);
+
+    // 3. User Settings Listener (for Budget)
+    useEffect(() => {
+        if (!currentUser?.uid) return;
+        const unsubscribeSettings = onSnapshot(doc(db, "users", currentUser.uid, "settings", "budget"), (docSnap) => {
+            if (docSnap.exists()) {
+                setBudgetLimit(docSnap.data().limit || 0);
+            }
+        });
+        return () => unsubscribeSettings();
+    }, [currentUser]);
+
+    // 4. Calculate Monthly Spent
+    useEffect(() => {
+        if (!transactions) return;
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const spent = transactions
+            .filter(t => {
+                const d = new Date(t.date);
+                return d.getMonth() === currentMonth &&
+                    d.getFullYear() === currentYear &&
+                    t.type === 'expense';
+            })
+            .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+        const earned = transactions
+            .filter(t => {
+                const d = new Date(t.date);
+                return d.getMonth() === currentMonth &&
+                    d.getFullYear() === currentYear &&
+                    t.type === 'income';
+            })
+            .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+        setMonthlySpent(spent);
+        setMonthlyIncome(earned);
+    }, [transactions]);
+
     useEffect(() => {
         const fetchUserDataAndCheckOnboarding = async () => {
+            // ... (keep existing loading logic, relying on listeners for txns)
+            // But we still need to load USER PROFILE data once
             setLoading(true);
             setError("");
 
@@ -51,12 +155,11 @@ export default function Dashboard() {
                 setHasCompletedOnboarding(completed);
 
                 if (!completed) {
-                    // User hasn't completed onboarding, show the form
                     setLoading(false);
                     return;
                 }
 
-                // User has completed onboarding, fetch their data
+                // User has completed onboarding, fetch their profile data
                 const userDoc = await getDoc(doc(db, "userProfiles", currentUser.uid));
                 if (!userDoc.exists()) {
                     setError("No user data found. Please complete the onboarding form.");
@@ -68,104 +171,10 @@ export default function Dashboard() {
                 const userData = userDoc.data();
                 setFormData(userData);
 
-                // --- Analyze with Gemini ---
-                analyzeFinance(userData)
-                    .then((result) => setInsights(result))
-                    .catch(() => setError("Failed to analyze finance data."));
+                // --- Analyze Finance & Loan Payoff moved to dynamic useEffect ---
+                // We do this to ensure they use the latest transaction data along with profile data.
 
-                const income = parseFloat(userData.income || 0);
-                const expenses =
-                    parseFloat(userData.food || 0) +
-                    parseFloat(userData.rent || 0) +
-                    parseFloat(userData.transport || 0) +
-                    parseFloat(userData.utilities || 0) +
-                    parseFloat(userData.misc || 0);
 
-                // --- Savings forecast ---
-                let savings = income - expenses;
-                const initialSavings = parseFloat(userData.savings || 0);
-
-                // API requires non-negative monthly saving usually, but let's send what we have
-                // If savings is negative, the backend might reject it with 400.
-                // We should treat negative savings as 0 for "growth" forecast or handle debt logic.
-                // For now, let's clamp valid input to avoid 400 crash.
-                const effectiveMonthlySaving = Math.max(0, savings);
-
-                fetch(`${import.meta.env.VITE_API_BASE_URL}/forecast`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        monthlySaving: effectiveMonthlySaving,
-                        months: 120
-                    }),
-                })
-                    .then((res) => {
-                        if (!res.ok) throw new Error("Forecast API error " + res.status);
-                        return res.json();
-                    })
-                    .then((data) => {
-                        const series = data.series || data;
-                        setForecastData(
-                            series.map((d) => ({
-                                date: d.ds?.slice(0, 10),
-                                netWorth: parseFloat(d.yhat || 0),
-                            }))
-                        );
-                    })
-                    .catch((err) => console.error("Forecast fetch failed:", err));
-
-                // --- Loan payoff ---
-                const loanAmount = parseFloat(userData.loanAmount || 0);
-                const emi = parseFloat(userData.emi || userData.monthlyEMI || 0);
-                const rate = parseFloat(userData.interestRate || 0.1);
-                if (loanAmount > 0 && emi > 0) {
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/loan-payoff`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            principal: loanAmount,
-                            monthlyEmi: emi,
-                            annualInterestRate: rate,
-                        }),
-                    })
-                        .then((res) => res.json())
-                        .then((data) => {
-                            const timeline = data.timeline || data;
-                            setLoanData(
-                                timeline.map((d) => ({
-                                    date: d.month,
-                                    remaining: parseFloat(d.remaining || 0),
-                                }))
-                            );
-                        })
-                        .catch(() => setError("Failed to fetch loan payoff data."));
-                }
-
-                // --- Retirement corpus ---
-                const currentSavings = parseFloat(userData.currentSavings || initialSavings);
-                const monthlyContribution = parseFloat(userData.monthlyContribution || savings);
-
-                fetch(`${import.meta.env.VITE_API_BASE_URL}/retirement`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        currentSavings,
-                        monthlyContribution: Math.max(0, monthlyContribution),
-                        annualReturnRate: 0.08,
-                        months: 360,
-                    }),
-                })
-                    .then((res) => res.json())
-                    .then((data) => {
-                        const corpus = data.corpus || data;
-                        setRetirementData(
-                            corpus.map((d) => ({
-                                date: d.month,
-                                corpus: parseFloat(d.projected_corpus || 0),
-                            }))
-                        );
-                    })
-                    .catch(() => console.log("Retirement fetch skipped or failed"));
 
                 // --- Spending Clusters ---
                 const expensePayload = {
@@ -187,6 +196,20 @@ export default function Dashboard() {
                         setSpendingClusters(data.clusters || []);
                     })
                     .catch((err) => console.error("Cluster fetch failed", err));
+
+                setLoading(false);
+
+                // --- Spending Clusters removed from here as it was duplicated in replacement above (wait, I need to check target) ---
+                // Actually I am replacing the whole block including spending clusters logic in the target, so I should just let the first block handle Loan and Clusters.
+                // But wait, the previous block I wrote handles Loan and Clusters.
+                // And I removed Forecast and Retirement from it.
+                // So now I need to add the useEffect for Forecast and Retirement.
+
+                // Let's add the useEffect AFTER the fetchUserDataAndCheckOnboarding function or inside the component body.
+                // Logic:
+                // 1. Remove the static fetch block from `fetchUserDataAndCheckOnboarding` (done in chunk 1).
+                // 2. Add new `useEffect` hook.
+
 
                 setLoading(false);
             } catch (err) {
@@ -242,12 +265,253 @@ export default function Dashboard() {
         }
     };
 
+    // --- Daily-use Features Functions ---
+    const fetchDailyInsights = async () => {
+        // Only fetch if we have form data
+        if (!formData || Object.keys(formData).length === 0) return;
+
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/insights/daily`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userData: formData,
+                    transactions // Using latest state from Firestore listener
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setDailyInsights(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch daily insights:", error);
+        }
+    };
+
+    const fetchStreaks = async () => {
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/streaks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ transactions })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setStreaks(data.streaks);
+            }
+        } catch (error) {
+            console.error("Failed to fetch streaks:", error);
+        }
+    };
+
+    const fetchAchievements = async () => {
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/achievements`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userData: formData,
+                    transactions,
+                    goals
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAchievements(data.achievements);
+            }
+        } catch (error) {
+            console.error("Failed to fetch achievements:", error);
+        }
+    };
+
+    const handleTransactionAdded = (transaction) => {
+        // No manual state update needed, Firestore listener handles it
+        // setShowAddTransaction(false); // <--- Removed to keep modal open for multiple adds
+    };
+
+    const handleCreateGoal = async (goalData) => {
+        if (!currentUser?.uid) return;
+
+        try {
+            // Write to Firestore instead of API
+            await addDoc(collection(db, "users", currentUser.uid, "goals"), {
+                ...goalData,
+                currentAmount: 0,
+                progress: 0,
+                createdAt: serverTimestamp()
+            });
+            // Listener will update state
+        } catch (error) {
+            console.error("Failed to create goal:", error);
+        }
+    };
+
+    const handleSetBudget = async (limit) => {
+        if (!currentUser?.uid) return;
+        try {
+            // Write to settings subcollection
+            const settingsRef = doc(db, "users", currentUser.uid, "settings", "budget");
+            // Use setDoc with merge: true or just setDoc, settings might not exist
+            const { setDoc } = await import("firebase/firestore");
+            await setDoc(settingsRef, { limit }, { merge: true });
+        } catch (error) {
+            console.error("Failed to set budget:", error);
+        }
+    };
+
+    // React to data changes to update insights
+    useEffect(() => {
+        if (formData && Object.keys(formData).length > 0) {
+            fetchDailyInsights();
+            fetchStreaks();
+            fetchAchievements();
+        }
+    }, [formData, transactions, goals]); // Depend on transactions/goals to re-run analysis
+
+    // --- Dynamic Forecasts (Real-time Integration) ---
+    useEffect(() => {
+        if (!formData || Object.keys(formData).length === 0) return;
+
+        // Calculate Real Savings: Income (Profile) - Monthly Spent (Real-time)
+        // If Monthly Spent is 0 (start of month), maybe fallback to profile expenses?
+        // For "Connected" feel, let's use:
+        // Savings = Income - Max(ProfileExpenses, MonthlySpent) 
+        // OR just Income - MonthlySpent (but that implies 0 expenses at start of month = massive savings forecast)
+        // Let's use: Estimated Savings = Income - (MonthlySpent + EstimatedRemainingFixedExpenses?)
+        // To keep it simple and requested: "If I spend more, forecast drops".
+        // Let's use: Estimated Savings = Income - monthlySpent. 
+        // But we should clamp it reasonable.
+
+        const income = parseFloat(formData.income || 0);
+        // Combine Profile Income with Real-time Income?
+        // Usually Profile Income is "Expected Monthly Salary".
+        // Real-time Income is "Actual Money Received".
+        // If user logs their salary, we shouldn't double count.
+        // A simple heuristic: If MonthlyIncome > 0, use it as the base? 
+        // Or just ADD `monthlyIncome` (assuming they are extra incomings)?
+        // For simplicity and "connection": Let's assume Profile is BASE, and Transactions are ACTUAL flows.
+        // If I add "Salary" transaction, I want it to count.
+        // Let's use: TotalIncome = Max(ProfileIncome, monthlyIncome) ? 
+        // Or just ProfileIncome + monthlyIncome (if Profile is just 'base' and they log specific checks).
+        // Let's go with: Total Available = (ProfileIncome) - monthlySpent. 
+        // Wait, if I add an Income transaction, it should OFFSET the spending.
+        // So Savings = ProfileIncome + monthlyIncome - monthlySpent.
+
+        const totalIncome = income + monthlyIncome;
+
+        // Dynamic Savings Calculation (Allow negative to show crash)
+        const dynamicSavings = totalIncome - monthlySpent;
+
+        // 1. Forecast API
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/forecast`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                monthlySaving: dynamicSavings,
+                months: 120
+            }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                const series = data.series || data;
+                if (Array.isArray(series)) {
+                    setForecastData(series.map((d) => ({
+                        date: d.ds?.slice(0, 10),
+                        netWorth: parseFloat(d.yhat || 0),
+                    })));
+                }
+            })
+            .catch(err => console.error("Dynamic forecast failed:", err));
+
+        // 2. Retirement API
+        const initialSavings = parseFloat(formData.savings || 0);
+
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/retirement`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                currentSavings: initialSavings,
+                monthlyContribution: dynamicSavings,
+                annualReturnRate: 0.08,
+                months: 360,
+            }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                const corpus = data.corpus || data;
+                if (Array.isArray(corpus)) {
+                    setRetirementData(corpus.map((d) => ({
+                        date: d.month,
+                        corpus: parseFloat(d.projected_corpus || 0),
+                    })));
+                }
+            })
+            .catch(err => console.error("Dynamic retirement failed:", err));
+
+        // 3. Dynamic Loan Payoff
+        // Calculate total debt payments from transactions matching 'Debt', 'Loan', 'EMI'
+        const debtPaid = transactions
+            .filter(t =>
+                t.type === 'expense' &&
+                ['debt', 'loan', 'emi', 'repayment'].some(k => t.category?.toLowerCase().includes(k) || t.description?.toLowerCase().includes(k))
+            )
+            .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+        const initialLoan = parseFloat(formData.loanAmount || 0);
+        const emi = parseFloat(formData.emi || formData.monthlyEMI || 0);
+        const rate = parseFloat(formData.interestRate || 0.1);
+        const realPrincipal = Math.max(0, initialLoan - debtPaid);
+
+        if (initialLoan > 0 && emi > 0) {
+            fetch(`${import.meta.env.VITE_API_BASE_URL}/loan-payoff`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    principal: realPrincipal,
+                    monthlyEmi: emi,
+                    annualInterestRate: rate,
+                }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    const timeline = data.timeline || data;
+                    if (Array.isArray(timeline)) {
+                        setLoanData(timeline.map((d) => ({
+                            date: d.month,
+                            remaining: parseFloat(d.remaining || 0),
+                        })));
+                    }
+                })
+                .catch(err => console.error("Dynamic loan fetch failed:", err));
+        }
+
+        // 4. Dynamic Advisor AI
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                context: {
+                    ...formData,
+                    real_income: totalIncome,
+                    real_expenses: monthlySpent
+                }
+            }),
+        })
+            .then(res => res.json())
+            .then(result => {
+                if (result.summary) setInsights(result);
+            })
+            .catch(err => console.error("Dynamic AI fetch failed:", err));
+
+    }, [formData, monthlySpent, monthlyIncome, transactions]);
+
     if (loading) return (
         <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: '"Source Code Pro", monospace' }}>
             <p className="text-sm tracking-widest uppercase">Loading your financial universe...</p>
         </div>
     );
 
+    // ... (rest of the render logic same as before)
     if (error && !formData.income) return (
         <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6" style={{ fontFamily: '"Source Code Pro", monospace' }}>
             <p className="text-sm tracking-widest uppercase text-red-600 mb-4">{error}</p>
@@ -260,16 +524,11 @@ export default function Dashboard() {
         </div>
     );
 
-
-
-
-    // Show onboarding form if user hasn't completed it
     if (!hasCompletedOnboarding) {
         navigate('/onboarding');
         return null;
     }
 
-    // Show dashboard for users who have completed onboarding
     return (
         <div className="min-h-screen bg-white text-black">
             {/* Navigation */}
@@ -311,6 +570,31 @@ export default function Dashboard() {
                         Welcome back. Here is your wealth trajectory.
                     </p>
                 </header>
+
+                {/* DAILY-USE FEATURES SECTION */}
+                <div className="mb-16 space-y-8">
+                    {/* Daily Overview Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <DailyScoreWidget userData={formData} transactions={transactions} />
+                        <TodaySummaryWidget todaySummary={dailyInsights?.todaySummary} />
+                    </div>
+
+                    {/* Daily Tip */}
+                    <DailyTipWidget userData={formData} transactions={transactions} />
+
+                    {/* Gamification Grid */}
+                    <StreaksWidget streaks={streaks} />
+                    <AchievementsWidget achievements={achievements} />
+                </div>
+
+                {/* Budget & Goals Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <BudgetWidget totalSpent={monthlySpent} budgetLimit={budgetLimit} onSetBudget={handleSetBudget} />
+                    <GoalsWidget goals={goals} onCreateGoal={handleCreateGoal} />
+                </div>
+
+                {/* Recent Transactions (Full Width) */}
+                <RecentTransactions transactions={transactions} onRefresh={fetchDailyInsights} />
 
                 {/* Horizontal Line Separator */}
                 <div className="h-px bg-black opacity-20 mb-16" />
@@ -461,7 +745,28 @@ export default function Dashboard() {
                         </ResponsiveContainer>
                     )}
                 </div>
-            </motion.div>
-        </div>
+            </motion.div >
+
+            {/* Floating Add Transaction Button */}
+            < motion.button
+                initial={{ scale: 0 }
+                }
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.5, type: "spring" }}
+                onClick={() => setShowAddTransaction(true)}
+                className="fixed bottom-8 right-8 w-16 h-16 bg-black text-white rounded-full flex items-center justify-center text-2xl shadow-lg hover:scale-110 transition-transform z-30"
+                style={{ fontFamily: '"Source Code Pro", monospace' }}
+            >
+                +
+            </motion.button >
+
+            {/* Quick Add Transaction Modal */}
+            < QuickAddTransaction
+                isOpen={showAddTransaction}
+                onClose={() => setShowAddTransaction(false)}
+                onAdd={handleTransactionAdded}
+                currentUser={currentUser}
+            />
+        </div >
     );
 }
