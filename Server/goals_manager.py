@@ -7,6 +7,19 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 
+def safe_parse_date(date_str: str) -> datetime:
+    """Safely parse date string, defaulting to a far future date if invalid/missing"""
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except ValueError:
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return None
+
+
 def create_goal(
     user_id: str,
     name: str,
@@ -27,8 +40,8 @@ def create_goal(
     ]
     
     # Calculate monthly contribution needed
-    if deadline:
-        deadline_date = datetime.fromisoformat(deadline)
+    deadline_date = safe_parse_date(deadline)
+    if deadline_date:
         months_remaining = max(1, (deadline_date - datetime.now()).days / 30)
         monthly_needed = (target_amount - current_amount) / months_remaining
     else:
@@ -65,14 +78,14 @@ def update_goal_progress(goal: Dict, new_amount: float) -> Dict[str, Any]:
 
 def get_goal_projection(goal: Dict) -> Dict[str, Any]:
     """Calculate when goal will be reached at current pace"""
-    if goal["status"] == "completed":
+    if goal.get("status") == "completed":
         return {
             "daysToCompletion": 0,
             "projectedDate": goal.get("completedAt", ""),
             "onTrack": True
         }
     
-    remaining = goal["targetAmount"] - goal["currentAmount"]
+    remaining = goal.get("targetAmount", 0) - goal.get("currentAmount", 0)
     monthly_contribution = goal.get("monthlyContributionNeeded", 0)
     
     if monthly_contribution <= 0:
@@ -86,9 +99,9 @@ def get_goal_projection(goal: Dict) -> Dict[str, Any]:
     projected_date = datetime.now() + timedelta(days=months_needed * 30)
     
     # Check if on track
-    if goal.get("deadline"):
-        deadline = datetime.fromisoformat(goal["deadline"])
-        on_track = projected_date <= deadline
+    deadline_date = safe_parse_date(goal.get("deadline"))
+    if deadline_date:
+        on_track = projected_date <= deadline_date
     else:
         on_track = True
     

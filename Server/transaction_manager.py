@@ -7,6 +7,21 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 
+def safe_parse_date(date_str: str) -> datetime:
+    """Safely parse date string, defaulting to now if invalid"""
+    if not date_str:
+        return datetime.now()
+    try:
+        # Handle simple ISO format
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except ValueError:
+        try:
+            # Handle other common formats if needed
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return datetime.now()
+
+
 def calculate_daily_score(user_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Calculate daily financial health score (0-100)
@@ -72,10 +87,11 @@ def get_daily_summary(transactions: List[Dict]) -> Dict[str, Any]:
     """
     today = datetime.now().date()
     
-    today_transactions = [
-        t for t in transactions 
-        if datetime.fromisoformat(t.get('date', '')).date() == today
-    ]
+    today_transactions = []
+    for t in transactions:
+        dt = safe_parse_date(t.get('date', ''))
+        if dt.date() == today:
+            today_transactions.append(t)
     
     money_in = sum(t['amount'] for t in today_transactions if t.get('type') == 'income')
     money_out = sum(t['amount'] for t in today_transactions if t.get('type') == 'expense')
@@ -96,10 +112,11 @@ def get_weekly_summary(transactions: List[Dict]) -> Dict[str, Any]:
     today = datetime.now().date()
     week_start = today - timedelta(days=today.weekday())
     
-    week_transactions = [
-        t for t in transactions 
-        if datetime.fromisoformat(t.get('date', '')).date() >= week_start
-    ]
+    week_transactions = []
+    for t in transactions:
+        dt = safe_parse_date(t.get('date', ''))
+        if dt.date() >= week_start:
+            week_transactions.append(t)
     
     spending_by_category = {}
     for t in week_transactions:
@@ -132,11 +149,11 @@ def calculate_budget_status(transactions: List[Dict], budgets: Dict[str, float])
     today = datetime.now()
     month_start = today.replace(day=1).date()
     
-    month_transactions = [
-        t for t in transactions 
-        if datetime.fromisoformat(t.get('date', '')).date() >= month_start
-        and t.get('type') == 'expense'
-    ]
+    month_transactions = []
+    for t in transactions:
+        dt = safe_parse_date(t.get('date', ''))
+        if dt.date() >= month_start and t.get('type') == 'expense':
+            month_transactions.append(t)
     
     # Calculate spending per category
     spending_by_category = {}
@@ -178,7 +195,7 @@ def get_recent_transactions(transactions: List[Dict], limit: int = 10) -> List[D
     """
     sorted_transactions = sorted(
         transactions,
-        key=lambda t: datetime.fromisoformat(t.get('date', '1970-01-01')),
+        key=lambda t: safe_parse_date(t.get('date', '')),
         reverse=True
     )
     return sorted_transactions[:limit]

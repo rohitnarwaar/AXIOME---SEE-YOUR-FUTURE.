@@ -7,6 +7,20 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 
+def safe_parse_date(date_str: str) -> datetime:
+    """Safely parse date string, defaulting to now if invalid"""
+    if not date_str:
+        return datetime.now()
+    try:
+        # Handle simple ISO format
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except ValueError:
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return datetime.now()
+
+
 def calculate_streaks(transactions: List[Dict]) -> Dict[str, Any]:
     """Calculate user streaks"""
     if not transactions:
@@ -26,10 +40,13 @@ def calculate_streaks(transactions: List[Dict]) -> Dict[str, Any]:
     
     for i in range(30):  # Check last 30 days
         check_date = current_date - timedelta(days=i)
-        has_transaction = any(
-            datetime.fromisoformat(t.get('date', '')).date() == check_date 
-            for t in sorted_txns
-        )
+        has_transaction = False
+        for t in sorted_txns:
+            dt = safe_parse_date(t.get('date', ''))
+            if dt.date() == check_date:
+                has_transaction = True
+                break
+        
         if has_transaction:
             tracking_streak += 1
         else:
@@ -39,8 +56,15 @@ def calculate_streaks(transactions: List[Dict]) -> Dict[str, Any]:
     savings_streak = 0
     for i in range(30):
         check_date = current_date - timedelta(days=i)
-        day_txns = [t for t in sorted_txns if datetime.fromisoformat(t.get('date', '')).date() == check_date]
+        day_txns = []
+        for t in sorted_txns:
+            dt = safe_parse_date(t.get('date', ''))
+            if dt.date() == check_date:
+                day_txns.append(t)
         
+        if not day_txns:
+            break
+            
         income = sum(t['amount'] for t in day_txns if t.get('type') == 'income')
         expenses = sum(t['amount'] for t in day_txns if t.get('type') == 'expense')
         
