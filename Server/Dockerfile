@@ -10,6 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 5000
+EXPOSE 10000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "wsgi:app"]
+CMD gunicorn --bind 0.0.0.0:${PORT:-10000} wsgi:app
