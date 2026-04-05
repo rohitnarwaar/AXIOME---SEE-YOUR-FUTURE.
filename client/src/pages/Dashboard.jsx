@@ -4,9 +4,10 @@ import { motion } from "framer-motion";
 import analyzeFinance from "../utils/analyzeFinance";
 import {
     LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    PieChart, Pie, Cell
 } from "recharts";
 import { db } from "../firebase";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 
 // Daily-use feature components
@@ -21,6 +22,7 @@ import DailyTipWidget from "../components/DailyTipWidget";
 import BudgetWidget from "../components/BudgetWidget";
 
 export default function Dashboard() {
+    const [userRole, setUserRole] = useState("admin"); // "admin" or "viewer"
     const [formData, setFormData] = useState({});
     const [insights, setInsights] = useState(null);
     const [error, setError] = useState("");
@@ -35,6 +37,8 @@ export default function Dashboard() {
     const [simulateData, setSimulateData] = useState([]);
     const [deltaSavings, setDeltaSavings] = useState(5000);
     const [spendingClusters, setSpendingClusters] = useState([]);
+    const [isSpendingExpanded, setIsSpendingExpanded] = useState(false);
+    const [editingCategory, setEditingCategory] = useState(null);
 
     // Daily-use feature state
     const [transactions, setTransactions] = useState([]);
@@ -46,6 +50,8 @@ export default function Dashboard() {
     const [monthlySpent, setMonthlySpent] = useState(0);
     const [monthlyIncome, setMonthlyIncome] = useState(0);
     const [showAddTransaction, setShowAddTransaction] = useState(false);
+    const [activeView, setActiveView] = useState("wealth"); // "wealth" or "daily"
+    const [sidebarOpen, setSidebarOpen] = useState(false); // mobile sidebar toggle
 
     const handleLogout = async () => {
         try {
@@ -235,6 +241,61 @@ export default function Dashboard() {
         }
     }, [loading]);
 
+    // --- Update Budget Category ---
+    const handleUpdateCategory = async (category, newAmount) => {
+        setEditingCategory(null);
+        if (!newAmount || isNaN(newAmount) || parseFloat(newAmount) < 0) return;
+
+        try {
+            const fieldMap = {
+                'Rent': 'rent',
+                'Food': 'food',
+                'Transport': 'transport',
+                'Utilities': 'utilities',
+                'Misc': 'misc',
+                'EMI': 'monthlyEmi'
+            };
+            const field = fieldMap[category];
+            if (!field) return;
+
+            await setDoc(doc(db, "userProfiles", currentUser.uid), {
+                [field]: parseFloat(newAmount)
+            }, { merge: true });
+
+            // Refresh profile data
+            const userDocData = await getDoc(doc(db, "userProfiles", currentUser.uid));
+            if (userDocData.exists()) {
+                setFormData(userDocData.data());
+                // Trigger re-fetch of clusters
+                fetchClusters(userDocData.data());
+            }
+        } catch (err) {
+            console.error("Update failed", err);
+        }
+    };
+
+    const fetchClusters = (userData) => {
+        const expensePayload = {
+            Rent: parseFloat(userData.rent || 0),
+            Food: parseFloat(userData.food || 0),
+            Transport: parseFloat(userData.transport || 0),
+            Utilities: parseFloat(userData.utilities || 0),
+            Misc: parseFloat(userData.misc || 0),
+            EMI: parseFloat(userData.monthlyEmi || userData.emi || 0)
+        };
+
+        fetch(`${import.meta.env.VITE_API_BASE_URL}/analyze/clusters`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ expenses: expensePayload }),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setSpendingClusters(data.clusters || []);
+            })
+            .catch((err) => console.error("Cluster fetch failed", err));
+    };
+
     // --- What-if Simulation ---
     const runSimulation = async () => {
         try {
@@ -383,24 +444,23 @@ export default function Dashboard() {
         // But we should clamp it reasonable.
 
         const income = parseFloat(formData.income || 0);
-        // Combine Profile Income with Real-time Income?
-        // Usually Profile Income is "Expected Monthly Salary".
-        // Real-time Income is "Actual Money Received".
-        // If user logs their salary, we shouldn't double count.
-        // A simple heuristic: If MonthlyIncome > 0, use it as the base? 
-        // Or just ADD `monthlyIncome` (assuming they are extra incomings)?
-        // For simplicity and "connection": Let's assume Profile is BASE, and Transactions are ACTUAL flows.
-        // If I add "Salary" transaction, I want it to count.
-        // Let's use: TotalIncome = Max(ProfileIncome, monthlyIncome) ? 
-        // Or just ProfileIncome + monthlyIncome (if Profile is just 'base' and they log specific checks).
-        // Let's go with: Total Available = (ProfileIncome) - monthlySpent. 
-        // Wait, if I add an Income transaction, it should OFFSET the spending.
-        // So Savings = ProfileIncome + monthlyIncome - monthlySpent.
 
+        // Calculate total planned expenses from Spending Architecture
+        const plannedExpenses = (
+            parseFloat(formData.rent || 0) +
+            parseFloat(formData.food || 0) +
+            parseFloat(formData.transport || 0) +
+            parseFloat(formData.utilities || 0) +
+            parseFloat(formData.misc || 0) +
+            parseFloat(formData.monthlyEmi || formData.emi || 0)
+        );
+
+        // Savings = Income - Architecture Budget
+        // This ensures the graphs react immediately when you optimize your Spending Architecture.
+        const dynamicSavings = income - plannedExpenses;
+
+        // totalIncome for Advisor context (Profile + Real-time Incomings)
         const totalIncome = income + monthlyIncome;
-
-        // Dynamic Savings Calculation (Allow negative to show crash)
-        const dynamicSavings = totalIncome - monthlySpent;
 
         // 1. Forecast API
         fetch(`${import.meta.env.VITE_API_BASE_URL}/forecast`, {
@@ -462,7 +522,7 @@ export default function Dashboard() {
         const rate = parseFloat(formData.interestRate || 0.1);
         const realPrincipal = Math.max(0, initialLoan - debtPaid);
 
-        if (initialLoan > 0 && emi > 0) {
+        if (realPrincipal > 0 && emi > 0) {
             fetch(`${import.meta.env.VITE_API_BASE_URL}/loan-payoff`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -529,244 +589,583 @@ export default function Dashboard() {
         return null;
     }
 
+    const userName = currentUser?.displayName || formData?.name || currentUser?.email?.split('@')[0] || 'User';
+
+    // Monthly Breakdown Data
+    const pieData = [
+        { name: 'Income', value: monthlyIncome, color: '#000000' },
+        { name: 'Expenses', value: monthlySpent, color: '#e5e5e5' }
+    ];
+    const hasData = monthlyIncome > 0 || monthlySpent > 0;
+    const netCashflow = monthlyIncome - monthlySpent;
+
     return (
-        <div className="min-h-screen bg-white text-black">
-            {/* Navigation */}
-            <motion.nav
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.8 }}
-                className="relative z-20 flex justify-between items-center py-6"
-                style={{
-                    paddingLeft: '10%',
-                    paddingRight: '10%',
-                    fontFamily: '"Source Code Pro", monospace'
-                }}
+        <div className="min-h-screen bg-white text-black flex" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+
+            {/* Mobile Hamburger Button */}
+            <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="fixed top-5 left-5 z-50 md:hidden w-10 h-10 flex flex-col items-center justify-center gap-1.5 bg-white border border-black/10 shadow-sm"
             >
-                <div className="text-sm tracking-widest">
-                    ONE'S OWN
-                </div>
+                <motion.span
+                    animate={sidebarOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
+                    className="block w-5 h-px bg-black"
+                />
+                <motion.span
+                    animate={sidebarOpen ? { opacity: 0 } : { opacity: 1 }}
+                    className="block w-5 h-px bg-black"
+                />
+                <motion.span
+                    animate={sidebarOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
+                    className="block w-5 h-px bg-black"
+                />
+            </button>
 
-                <div className="flex gap-8 text-sm tracking-wide">
-                    <button onClick={() => navigate('/')} className="hover:opacity-70 transition-opacity">Home</button>
-                    <button onClick={() => navigate('/upload')} className="hover:opacity-70 transition-opacity">Upload</button>
-                    <button onClick={handleLogout} className="hover:opacity-70 transition-opacity">Logout</button>
-                </div>
-            </motion.nav>
+            {/* Mobile Overlay */}
+            {sidebarOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setSidebarOpen(false)}
+                    className="fixed inset-0 bg-black/20 z-30 md:hidden"
+                />
+            )}
 
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
-                className="px-[10%] py-12"
-                style={{ fontFamily: '"Source Code Pro", monospace' }}
+            {/* ========== SIDEBAR (Left) ========== */}
+            <motion.aside
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.6 }}
+                className={`
+                    fixed top-0 left-0 h-screen w-64 bg-white border-r border-black/10
+                    flex flex-col justify-between py-10 px-8 z-40
+                    transition-transform duration-300 ease-in-out
+                    ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                    md:translate-x-0
+                `}
             >
-                {/* Header */}
-                <header className="mb-16">
-                    <h1 className="text-4xl font-light tracking-wide uppercase mb-4">
-                        Financial Overview
-                    </h1>
-                    <p className="text-sm opacity-60 tracking-wide">
-                        Welcome back. Here is your wealth trajectory.
-                    </p>
-                </header>
-
-                {/* DAILY-USE FEATURES SECTION */}
-                <div className="mb-16 space-y-8">
-                    {/* Daily Overview Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <DailyScoreWidget userData={formData} transactions={transactions} />
-                        <TodaySummaryWidget todaySummary={dailyInsights?.todaySummary} />
+                {/* Top Section */}
+                <div>
+                    {/* Brand */}
+                    <div className="mb-12">
+                        <h1 className="text-sm tracking-[0.3em] uppercase font-medium">One's Own</h1>
+                        <div className="h-px bg-black/10 mt-4" />
                     </div>
 
-                    {/* Daily Tip */}
-                    <DailyTipWidget userData={formData} transactions={transactions} />
+                    {/* User Identity */}
+                    <div className="mb-12">
+                        <p className="text-[10px] tracking-widest uppercase opacity-40 mb-2">Welcome back</p>
+                        <p className="text-sm tracking-wide truncate">{userName}</p>
+                    </div>
 
-                    {/* Gamification Grid */}
-                    <StreaksWidget streaks={streaks} />
-                    <AchievementsWidget achievements={achievements} />
-                </div>
+                    {/* Navigation */}
+                    <nav className="space-y-2 mb-12">
+                        <p className="text-[10px] tracking-widest uppercase opacity-40 mb-3">Dashboard</p>
 
-                {/* Budget & Goals Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <BudgetWidget totalSpent={monthlySpent} budgetLimit={budgetLimit} onSetBudget={handleSetBudget} />
-                    <GoalsWidget goals={goals} onCreateGoal={handleCreateGoal} />
-                </div>
+                        <button
+                            onClick={() => { setActiveView("wealth"); setSidebarOpen(false); }}
+                            className={`
+                                w-full text-left px-4 py-3 text-xs tracking-widest uppercase transition-all duration-200
+                                ${activeView === "wealth"
+                                    ? "bg-black text-white"
+                                    : "hover:bg-black/5"
+                                }
+                            `}
+                        >
+                            ◈ Wealth
+                        </button>
 
-                {/* Recent Transactions (Full Width) */}
-                <RecentTransactions transactions={transactions} onRefresh={fetchDailyInsights} />
+                        <button
+                            onClick={() => { setActiveView("daily"); setSidebarOpen(false); }}
+                            className={`
+                                w-full text-left px-4 py-3 text-xs tracking-widest uppercase transition-all duration-200
+                                ${activeView === "daily"
+                                    ? "bg-black text-white"
+                                    : "hover:bg-black/5"
+                                }
+                            `}
+                        >
+                            ◉ Daily
+                        </button>
+                    </nav>
 
-                {/* Horizontal Line Separator */}
-                <div className="h-px bg-black opacity-20 mb-16" />
-
-                {/* Net Worth Forecast */}
-                <div className="mb-16" id="net-worth">
-                    <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">NET WORTH FORECAST</h3>
-                    <p className="text-3xl font-light mb-8">
-                        ₹{forecastData.length > 0 ? Math.round(forecastData[forecastData.length - 1].netWorth).toLocaleString() : "---"}
-                    </p>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={forecastData}>
-                            <defs>
-                                <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
-                                    <stop offset="95%" stopColor="#000" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-                            <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
-                            <Tooltip
-                                contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
-                                itemStyle={{ color: '#000' }}
-                            />
-                            <Area type="monotone" dataKey="netWorth" stroke="#000" strokeWidth={2} fillOpacity={1} fill="url(#colorNetWorth)" />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-
-                {/* Horizontal Line Separator */}
-                <div className="h-px bg-black opacity-20 mb-16" />
-
-                {/* AI Insights */}
-                <div className="mb-16" id="ai-advisor">
-                    <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">ADVISOR AI</h3>
-                    <div className="text-sm leading-relaxed opacity-80 max-w-3xl">
-                        {insights ? (
-                            <p className="whitespace-pre-line">{insights.aiSummary}</p>
-                        ) : (
-                            <p className="opacity-50">Analyzing your financial data...</p>
+                    {/* Role Switcher */}
+                    <div className="mb-8">
+                        <p className="text-[10px] tracking-widest uppercase opacity-40 mb-3">Access</p>
+                        <div className="border border-black/10 px-3 py-2 flex items-center justify-between">
+                            <span className="text-[10px] uppercase tracking-widest opacity-60">Role</span>
+                            <select
+                                value={userRole}
+                                onChange={(e) => setUserRole(e.target.value)}
+                                className="bg-transparent text-xs tracking-wider uppercase focus:outline-none cursor-pointer text-right"
+                            >
+                                <option value="admin">Admin</option>
+                                <option value="viewer">Viewer</option>
+                            </select>
+                        </div>
+                        {userRole === 'viewer' && (
+                            <p className="text-[10px] text-yellow-600 mt-2 tracking-wide">Read-only mode active</p>
                         )}
                     </div>
                 </div>
 
-                {/* Horizontal Line Separator */}
-                <div className="h-px bg-black opacity-20 mb-16" />
-
-                {/* Charts Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-16 mb-16">
-                    {/* Debt Freedom */}
-                    <div id="debt">
-                        <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">DEBT FREEDOM</h3>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <LineChart data={loanData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-                                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
-                                <Line type="monotone" dataKey="remaining" stroke="#000" strokeWidth={2} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    {/* Retirement Corpus */}
-                    <div id="retirement">
-                        <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">RETIREMENT CORPUS</h3>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <LineChart data={retirementData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-                                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
-                                <Line type="monotone" dataKey="corpus" stroke="#000" strokeWidth={2} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
+                {/* Bottom Section — Actions */}
+                <div className="space-y-1">
+                    <div className="h-px bg-black/10 mb-4" />
+                    <button onClick={() => navigate('/')} className="w-full text-left px-4 py-2 text-xs tracking-widest uppercase opacity-50 hover:opacity-100 transition-opacity">
+                        Home
+                    </button>
+                    <button onClick={() => navigate('/upload')} className="w-full text-left px-4 py-2 text-xs tracking-widest uppercase opacity-50 hover:opacity-100 transition-opacity">
+                        Upload
+                    </button>
+                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-xs tracking-widest uppercase opacity-50 hover:opacity-100 transition-opacity text-red-500">
+                        Logout
+                    </button>
                 </div>
+            </motion.aside>
 
-                {/* Horizontal Line Separator */}
-                <div className="h-px bg-black opacity-20 mb-16" />
+            {/* ========== MAIN CONTENT (Flexible + Right Panel) ========== */}
+            <main className="flex-1 md:ml-64 min-h-screen">
+                <motion.div
+                    key={activeView}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="px-8 lg:px-12 py-12"
+                >
+                    {/* ===== WEALTH VIEW ===== */}
+                    {activeView === "wealth" && (
+                        <div className="lg:grid lg:grid-cols-[1fr_380px]">
+                            {/* Wealth: Primary Column */}
+                            <div className="lg:pr-16">
+                                <header className="mb-16">
+                                    <p className="text-[10px] tracking-widest uppercase opacity-40 mb-3">Financial Intelligence</p>
+                                    <h2 className="text-4xl font-light tracking-wide uppercase mb-4">
+                                        Wealth Overview
+                                    </h2>
+                                    <p className="text-sm opacity-60 tracking-wide">
+                                        Your long-term financial trajectory and growth.
+                                    </p>
+                                </header>
 
-                {/* Spending Tiers */}
-                <div className="mb-16" id="spending-tiers">
-                    <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">SPENDING TIERS</h3>
-                    <div className="space-y-4 max-w-2xl">
-                        {spendingClusters.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center py-3 border-b border-black/10">
-                                <div>
-                                    <p className="text-sm uppercase tracking-wide">{item.category}</p>
-                                    <p className="text-xs opacity-50 mt-1">{item.cluster}</p>
+                                {/* Net Worth Forecast */}
+                                <div className="mb-16" id="net-worth">
+                                    <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">NET WORTH FORECAST</h3>
+                                    <p className="text-3xl font-light mb-8">
+                                        ₹{forecastData.length > 0 ? Math.round(forecastData[forecastData.length - 1].netWorth).toLocaleString() : "---"}
+                                    </p>
+                                    <ResponsiveContainer width="100%" height={350}>
+                                        <AreaChart data={forecastData}>
+                                            <defs>
+                                                <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
+                                                    <stop offset="95%" stopColor="#000" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                                            <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                            <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }}
+                                                itemStyle={{ color: '#000' }}
+                                            />
+                                            <Area type="monotone" dataKey="netWorth" stroke="#000" strokeWidth={2} fillOpacity={1} fill="url(#colorNetWorth)" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
                                 </div>
-                                <span className="text-sm">₹{item.amount}</span>
+
+                                <div className="h-px bg-black opacity-[0.05] mb-16" />
+
+                                {/* Charts Grid — Debt + Retirement */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16">
+                                    <div id="debt">
+                                        <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">DEBT FREEDOM</h3>
+                                        {loanData.length > 0 ? (
+                                            <ResponsiveContainer width="100%" height={200}>
+                                                <LineChart data={loanData}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                                                    <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                                                    <Line type="monotone" dataKey="remaining" stroke="#000" strokeWidth={2} dot={false} />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        ) : (
+                                            <motion.div
+                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                className="h-[200px] flex flex-col items-center justify-center bg-black/[0.02] border border-black/5 rounded-sm p-8 text-center"
+                                            >
+                                                <div className="w-10 h-10 mb-4 bg-black text-white rounded-full flex items-center justify-center text-sm shadow-sm">✓</div>
+                                                <h4 className="text-[10px] tracking-[0.2em] font-bold uppercase mb-2">You are Debt-Free</h4>
+                                                <p className="text-[10px] opacity-40 uppercase tracking-widest leading-relaxed max-w-[200px]">
+                                                    A clean slate is the strongest foundation for wealth.
+                                                </p>
+                                            </motion.div>
+                                        )}
+                                    </div>
+
+                                    <div id="retirement">
+                                        <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">RETIREMENT CORPUS</h3>
+                                        <ResponsiveContainer width="100%" height={200}>
+                                            <LineChart data={retirementData}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                                                <XAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                                                <Line type="monotone" dataKey="corpus" stroke="#000" strokeWidth={2} dot={false} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <div className="h-px bg-black opacity-[0.05] mb-16" />
+
+                                {/* AI Financial Advisor — Central Insight */}
+                                <div className="mb-16" id="ai-advisor">
+                                    <h3 className="text-xs tracking-widest uppercase mb-8 opacity-60">AI INSIGHTS</h3>
+                                    <div className="bg-black/[0.02] border border-black/5 p-10 rounded-sm">
+                                        <div className="text-sm leading-relaxed opacity-80">
+                                            {insights ? (
+                                                <p className="whitespace-pre-line">{insights.summary}</p>
+                                            ) : (
+                                                <p className="opacity-50 italic">Synthesizing data...</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-px bg-black opacity-[0.05] mb-16" />
+
+                                {/* What-if Simulator */}
+                                <div className="mb-16" id="simulator">
+                                    <div className="mb-8">
+                                        <h3 className="text-xs tracking-widest uppercase mb-4 opacity-60">SIMULATOR</h3>
+                                        <p className="text-sm opacity-60">See how saving more impacts your future.</p>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-6 mb-8">
+                                        <span className="text-xs tracking-white opacity-60 uppercase tracking-tighter">Save Extra</span>
+                                        <input
+                                            type="range"
+                                            min="1000"
+                                            max="50000"
+                                            step="1000"
+                                            value={deltaSavings}
+                                            onChange={(e) => setDeltaSavings(e.target.value)}
+                                            disabled={userRole === 'viewer'}
+                                            className="grow md:grow-0 w-48 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+                                        />
+                                        <span className="text-sm font-medium">₹{parseInt(deltaSavings).toLocaleString()}</span>
+                                        <button
+                                            onClick={runSimulation}
+                                            disabled={userRole === 'viewer'}
+                                            className="px-6 py-2 border border-black text-xs tracking-widest uppercase hover:bg-black hover:text-white transition-colors"
+                                        >
+                                            Simulate
+                                        </button>
+                                    </div>
+
+                                    {simulateData.length > 0 && (
+                                        <ResponsiveContainer width="100%" height={300}>
+                                            <AreaChart data={simulateData}>
+                                                <defs>
+                                                    <linearGradient id="colorBump" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
+                                                        <stop offset="95%" stopColor="#000" stopOpacity={0} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
+                                                <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                                                <Legend iconType="circle" />
+                                                <Area type="monotone" dataKey="baseValue" name="Current Path" stroke="#999" fill="transparent" strokeDasharray="5 5" />
+                                                <Area type="monotone" dataKey="bumpValue" name="Proposed Path" stroke="#000" fill="url(#colorBump)" strokeWidth={2} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
                             </div>
-                        ))}
-                        {spendingClusters.length === 0 && <p className="text-sm opacity-50">No expense data to cluster.</p>}
-                    </div>
-                </div>
 
-                {/* Horizontal Line Separator */}
-                <div className="h-px bg-black opacity-20 mb-16" />
+                            {/* Wealth: Intelligence Panel (Right) */}
+                            <div className="hidden lg:block border-l border-black/[0.08] pl-16">
+                                <div className="sticky top-12 space-y-12">
+                                    {/* Monthly Cashflow Donut */}
+                                    <div className="bg-black/[0.01] border border-black/5 p-8 rounded-sm">
+                                        <h3 className="text-[10px] tracking-widest uppercase opacity-40 mb-6">This Month Breakdown</h3>
 
-                {/* What-if Simulator */}
-                <div className="mb-16" id="simulator">
-                    <div className="mb-8">
-                        <h3 className="text-xs tracking-widest uppercase mb-4 opacity-60">SIMULATOR</h3>
+                                        <div className="relative h-48 flex items-center justify-center">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart>
+                                                    <Pie
+                                                        data={hasData ? pieData : [{ value: 1 }]}
+                                                        innerRadius={60}
+                                                        outerRadius={80}
+                                                        paddingAngle={5}
+                                                        dataKey="value"
+                                                        stroke="none"
+                                                    >
+                                                        {hasData ? (
+                                                            pieData.map((entry, index) => (
+                                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                                            ))
+                                                        ) : (
+                                                            <Cell fill="#f3f4f6" />
+                                                        )}
+                                                    </Pie>
+                                                    <Tooltip
+                                                        enabled={hasData}
+                                                        contentStyle={{
+                                                            fontFamily: '"Source Code Pro", monospace',
+                                                            fontSize: '10px',
+                                                            border: '1px solid #eee',
+                                                            borderRadius: '0px'
+                                                        }}
+                                                    />
+                                                </PieChart>
+                                            </ResponsiveContainer>
 
-                        <p className="text-sm opacity-60">See how saving more impacts your future.</p>
-                    </div>
+                                            {/* Center Text */}
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                                {hasData ? (
+                                                    <>
+                                                        <span className="text-[10px] uppercase opacity-40 tracking-tighter">Net</span>
+                                                        <span className={`text-sm font-mono ${netCashflow >= 0 ? 'text-black' : 'text-red-500'}`}>
+                                                            {netCashflow >= 0 ? '+' : ''}₹{Math.abs(Math.round(netCashflow)).toLocaleString()}
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-[10px] uppercase opacity-30">No Data</span>
+                                                )}
+                                            </div>
+                                        </div>
 
-                    <div className="flex items-center gap-6 mb-8">
-                        <span className="text-xs tracking-wide opacity-60">SAVE EXTRA:</span>
-                        <input
-                            type="range"
-                            min="1000"
-                            max="50000"
-                            step="1000"
-                            value={deltaSavings}
-                            onChange={(e) => setDeltaSavings(e.target.value)}
-                            className="w-48 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black hover:bg-gray-300 transition-colors"
-                        />
-                        <span className="text-sm">+₹{parseInt(deltaSavings).toLocaleString()}</span>
-                        <button
-                            onClick={runSimulation}
-                            className="px-6 py-2 border border-black text-xs tracking-widest uppercase hover:bg-black hover:text-white transition-colors"
-                        >
-                            Run
-                        </button>
-                    </div>
+                                        {/* Legend */}
+                                        <div className="mt-6 space-y-3">
+                                            <div className="flex justify-between items-center text-[10px] tracking-widest uppercase">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 bg-black" />
+                                                    <span className="opacity-60">Income</span>
+                                                </div>
+                                                <span className="font-mono">₹{monthlyIncome.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[10px] tracking-widest uppercase">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 bg-[#e5e5e5]" />
+                                                    <span className="opacity-60">Expenses</span>
+                                                </div>
+                                                <span className="font-mono">₹{monthlySpent.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                    {simulateData.length > 0 && (
-                        <ResponsiveContainer width="100%" height={300}>
-                            <AreaChart data={simulateData}>
-                                <defs>
-                                    <linearGradient id="colorBump" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#000" stopOpacity={0.1} />
-                                        <stop offset="95%" stopColor="#000" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ddd" vertical={false} />
-                                <XAxis dataKey="date" stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#999" fontSize={10} tickLine={false} axisLine={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
-                                <Legend />
-                                <Area type="monotone" dataKey="baseValue" name="Current Path" stroke="#999" fill="transparent" strokeDasharray="5 5" />
-                                <Area type="monotone" dataKey="bumpValue" name="With Extra Savings" stroke="#000" fill="url(#colorBump)" strokeWidth={2} />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                                    {/* Spending Tiers Card */}
+                                    <div id="spending-tiers">
+                                        <button
+                                            onClick={() => setIsSpendingExpanded(!isSpendingExpanded)}
+                                            className="w-full flex justify-between items-center mb-6 group"
+                                        >
+                                            <h3 className="text-[10px] tracking-widest uppercase opacity-40 font-bold">Spending Architecture</h3>
+                                            <span className="text-[10px] opacity-40 group-hover:opacity-100 transition-opacity">
+                                                {isSpendingExpanded ? '[-]' : '[+]'}
+                                            </span>
+                                        </button>
+                                        <motion.div
+                                            initial={false}
+                                            animate={{
+                                                height: isSpendingExpanded ? 'auto' : 0,
+                                                opacity: isSpendingExpanded ? 1 : 0
+                                            }}
+                                            transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="space-y-4">
+                                                {spendingClusters.map((item, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="group relative flex justify-between items-center py-3 border-b border-black/[0.08] hover:bg-black/[0.005] transition-colors cursor-pointer"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingCategory(item.category);
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <p className="text-xs uppercase tracking-widest">{item.category}</p>
+                                                            <p className="text-[10px] opacity-40 mt-1 uppercase">{item.cluster}</p>
+                                                        </div>
+                                                        {editingCategory === item.category ? (
+                                                            <div onClick={(e) => e.stopPropagation()}>
+                                                                <input
+                                                                    type="number"
+                                                                    autoFocus
+                                                                    defaultValue={item.amount}
+                                                                    onBlur={(e) => handleUpdateCategory(item.category, e.target.value)}
+                                                                    onKeyDown={(e) => e.key === 'Enter' && handleUpdateCategory(item.category, e.target.value)}
+                                                                    className="w-24 bg-white border border-black px-2 py-1 text-xs font-mono text-right focus:outline-none"
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs font-mono">₹{item.amount.toLocaleString()}</span>
+                                                                <span className="text-[10px] opacity-0 group-hover:opacity-40 transition-opacity">EDIT</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {spendingClusters.length === 0 && <p className="text-xs opacity-50 px-1 py-4">No budget data synced.</p>}
+                                            </div>
+                                        </motion.div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     )}
-                </div>
-            </motion.div >
+
+                    {/* ===== DAILY VIEW ===== */}
+                    {activeView === "daily" && (
+                        <div className="lg:grid lg:grid-cols-[1fr_380px]">
+                            {/* Daily: Primary Column */}
+                            <div className="lg:pr-16">
+                                <header className="mb-16">
+                                    <p className="text-[10px] tracking-widest uppercase opacity-40 mb-3">Operational Finance</p>
+                                    <h2 className="text-4xl font-light tracking-wide uppercase mb-4">
+                                        Daily Finances
+                                    </h2>
+                                    <p className="text-sm opacity-60 tracking-wide">
+                                        Real-time cashflow and active goals.
+                                    </p>
+                                </header>
+
+                                {/* Daily Overview Grid */}
+                                <div className="mb-12">
+                                    <DailyScoreWidget userData={formData} transactions={transactions} />
+                                </div>
+
+                                {/* Budget & Goals Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                                    <BudgetWidget totalSpent={monthlySpent} budgetLimit={budgetLimit} onSetBudget={handleSetBudget} disabled={userRole === 'viewer'} />
+                                    <GoalsWidget goals={goals} onCreateGoal={handleCreateGoal} disabled={userRole === 'viewer'} />
+                                </div>
+
+                                <div className="h-px bg-black opacity-[0.05] mb-12" />
+
+                                {/* Transaction History */}
+                                <RecentTransactions transactions={transactions} onRefresh={fetchDailyInsights} />
+                            </div>
+
+                            {/* Daily: Intelligence Panel (Right) */}
+                            <div className="hidden lg:block border-l border-black/[0.08] pl-16">
+                                <div className="sticky top-12 space-y-12">
+                                    {/* Today Summary */}
+                                    <div className="bg-black/[0.02] border border-black/5 p-8 rounded-sm">
+                                        <TodaySummaryWidget todaySummary={dailyInsights?.todaySummary} />
+                                    </div>
+
+                                    {/* Daily Tip */}
+                                    <div className="border border-black/10 p-6 rounded-sm bg-white">
+                                        <h3 className="text-[10px] tracking-widest uppercase mb-4 opacity-40 font-bold">Daily Optimization</h3>
+                                        <DailyTipWidget userData={formData} transactions={transactions} />
+                                    </div>
+
+                                    {/* Streaks & Progress */}
+                                    <div className="space-y-6">
+                                        <h3 className="text-[10px] tracking-widest uppercase opacity-40 font-bold">Psychological Momentum</h3>
+                                        <StreaksWidget streaks={streaks} />
+                                        <AchievementsWidget achievements={achievements} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Mobile-only stacks for Right-panel components */}
+                    <div className="lg:hidden mt-16 pt-16 border-t border-black/10 space-y-16">
+                        {activeView === "wealth" && (
+                            <>
+                                {/* Monthly Breakdown (Mobile Stack) */}
+                                <div className="bg-black/[0.01] border border-black/5 p-8 rounded-sm mb-12">
+                                    <h3 className="text-[10px] tracking-widest uppercase opacity-40 mb-6">This Month Breakdown</h3>
+                                    <div className="h-48 relative flex items-center justify-center">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={hasData ? pieData : [{ value: 1 }]}
+                                                    innerRadius={60}
+                                                    outerRadius={80}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                    stroke="none"
+                                                >
+                                                    {hasData ? (
+                                                        pieData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                                        ))
+                                                    ) : (
+                                                        <Cell fill="#f3f4f6" />
+                                                    )}
+                                                </Pie>
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                            {hasData ? (
+                                                <span className={`text-sm font-mono ${netCashflow >= 0 ? 'text-black' : 'text-red-500'}`}>
+                                                    ₹{Math.abs(Math.round(netCashflow)).toLocaleString()}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] uppercase opacity-30">No Data</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xs uppercase tracking-widest mb-6 opacity-40">Spending Tiers</h3>
+                                    <div className="space-y-4">
+                                        {spendingClusters.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between py-2 border-b border-black/5 text-sm uppercase">
+                                                <span>{item.category}</span>
+                                                <span className="font-mono">₹{item.amount}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        {activeView === "daily" && (
+                            <>
+                                <TodaySummaryWidget todaySummary={dailyInsights?.todaySummary} />
+                                <div className="bg-black/[0.01] p-6 border border-black/5">
+                                    <DailyTipWidget userData={formData} transactions={transactions} />
+                                </div>
+                                <StreaksWidget streaks={streaks} />
+                                <AchievementsWidget achievements={achievements} />
+                            </>
+                        )}
+                    </div>
+                </motion.div>
+            </main>
 
             {/* Floating Add Transaction Button */}
-            < motion.button
-                initial={{ scale: 0 }
-                }
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.5, type: "spring" }}
-                onClick={() => setShowAddTransaction(true)}
-                className="fixed bottom-8 right-8 w-16 h-16 bg-black text-white rounded-full flex items-center justify-center text-2xl shadow-lg hover:scale-110 transition-transform z-30"
-                style={{ fontFamily: '"Source Code Pro", monospace' }}
-            >
-                +
-            </motion.button >
+            {activeView === "daily" && userRole === 'admin' && (
+                <motion.button
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.5, type: "spring" }}
+                    onClick={() => setShowAddTransaction(true)}
+                    className="fixed bottom-8 right-8 w-16 h-16 bg-black text-white rounded-full flex items-center justify-center text-2xl shadow-lg hover:scale-110 transition-transform z-30"
+                >
+                    +
+                </motion.button>
+            )}
 
-            {/* Quick Add Transaction Modal */}
-            < QuickAddTransaction
+            <QuickAddTransaction
                 isOpen={showAddTransaction}
                 onClose={() => setShowAddTransaction(false)}
                 onAdd={handleTransactionAdded}
                 currentUser={currentUser}
             />
-        </div >
+        </div>
     );
 }

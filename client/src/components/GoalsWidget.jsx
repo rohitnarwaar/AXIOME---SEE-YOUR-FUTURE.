@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 
-export default function GoalsWidget({ goals, onCreateGoal }) {
+export default function GoalsWidget({ goals, onCreateGoal, disabled }) {
     const [showCreate, setShowCreate] = useState(false);
     const [newGoal, setNewGoal] = useState({
         name: '',
@@ -27,12 +27,14 @@ export default function GoalsWidget({ goals, onCreateGoal }) {
         >
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xs tracking-widest uppercase opacity-60">Savings Goals</h3>
-                <button
-                    onClick={() => setShowCreate(!showCreate)}
-                    className="text-xs border border-white border-opacity-20 px-3 py-1 hover:bg-white hover:bg-opacity-5"
-                >
-                    {showCreate ? 'Cancel' : '+ New Goal'}
-                </button>
+                {!disabled && (
+                    <button
+                        onClick={() => setShowCreate(!showCreate)}
+                        className="text-xs border border-white border-opacity-20 px-3 py-1 hover:bg-white hover:bg-opacity-5"
+                    >
+                        {showCreate ? 'Cancel' : '+ New Goal'}
+                    </button>
+                )}
             </div>
 
             {showCreate && (

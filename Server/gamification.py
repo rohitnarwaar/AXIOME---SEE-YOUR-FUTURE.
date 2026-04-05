@@ -65,8 +65,8 @@ def calculate_streaks(transactions: List[Dict]) -> Dict[str, Any]:
         if not day_txns:
             break
             
-        income = sum(t['amount'] for t in day_txns if t.get('type') == 'income')
-        expenses = sum(t['amount'] for t in day_txns if t.get('type') == 'expense')
+        income = sum(float(t.get('amount') or 0) for t in day_txns if t.get('type') == 'income')
+        expenses = sum(float(t.get('amount') or 0) for t in day_txns if t.get('type') == 'expense')
         
         if income > expenses:
             savings_streak += 1
@@ -86,8 +86,13 @@ def check_achievements(user_data: Dict, transactions: List[Dict], goals: List[Di
     """Check which achievements user has earned"""
     achievements = []
     
+    # Ensure inputs are valid
+    userData = user_data or {}
+    txns = transactions or []
+    gs = goals or []
+    
     # First Week Tracked
-    if len(transactions) >= 7:
+    if len(txns) >= 7:
         achievements.append({
             "id": "first_week",
             "name": "First Week Tracked",
@@ -97,7 +102,10 @@ def check_achievements(user_data: Dict, transactions: List[Dict], goals: List[Di
         })
     
     # Saved 10k
-    total_savings = user_data.get('savings', 0)
+    # Defensive fix: get 'savings' and cast to float, defaulting to 0 if None/Missing.
+    savings_val = userData.get('savings', 0)
+    total_savings = float(savings_val if savings_val is not None else 0)
+    
     if total_savings >= 10000:
         achievements.append({
             "id": "saved_10k",
@@ -108,7 +116,7 @@ def check_achievements(user_data: Dict, transactions: List[Dict], goals: List[Di
         })
     
     # Goal Completed
-    completed_goals = [g for g in goals if g.get('status') == 'completed']
+    completed_goals = [g for g in gs if g and g.get('status') == 'completed']
     if completed_goals:
         achievements.append({
             "id": "goal_complete",
@@ -119,7 +127,7 @@ def check_achievements(user_data: Dict, transactions: List[Dict], goals: List[Di
         })
     
     # Transaction Master
-    if len(transactions) >= 100:
+    if len(txns) >= 100:
         achievements.append({
             "id": "transaction_master",
             "name": "Transaction Master",

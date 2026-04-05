@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-export default function BudgetWidget({ totalSpent, budgetLimit, onSetBudget }) {
+export default function BudgetWidget({ totalSpent, budgetLimit, onSetBudget, disabled }) {
     const [isEditing, setIsEditing] = useState(false);
     const [newLimit, setNewLimit] = useState(budgetLimit || '');
 
@@ -38,12 +38,14 @@ export default function BudgetWidget({ totalSpent, budgetLimit, onSetBudget }) {
         >
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xs tracking-widest uppercase opacity-60">Monthly Budget</h3>
-                <button
-                    onClick={() => setIsEditing(!isEditing)}
-                    className="text-xs border border-white border-opacity-20 px-3 py-1 hover:bg-white hover:bg-opacity-5"
-                >
-                    {isEditing ? 'Cancel' : (budgetLimit ? 'Edit' : 'Set Budget')}
-                </button>
+                {!disabled && (
+                    <button
+                        onClick={() => setIsEditing(!isEditing)}
+                        className="text-xs border border-white border-opacity-20 px-3 py-1 hover:bg-white hover:bg-opacity-5"
+                    >
+                        {isEditing ? 'Cancel' : (budgetLimit ? 'Edit' : 'Set Budget')}
+                    </button>
+                )}
             </div>
 
             {isEditing ? (
