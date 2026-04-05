@@ -63,7 +63,7 @@ export default function MultiStepForm() {
   const back = () => setStep((prev) => Math.max(prev - 1, 0));
 
   return (
-    <div className="min-h-screen bg-white px-[10%] py-12" style={{ fontFamily: '"Source Code Pro", monospace' }}>
+    <div className="min-h-screen bg-white px-6 md:px-[10%] py-10 md:py-16" style={{ fontFamily: '"Source Code Pro", monospace' }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -71,7 +71,7 @@ export default function MultiStepForm() {
         className="max-w-3xl mx-auto"
       >
         {/* Step Indicator */}
-        <div className="flex justify-between mb-20 pb-6 border-b border-black/20">
+        <div className="flex justify-between mb-12 md:mb-20 pb-8 border-b border-black/10">
           {steps.map((s, i) => (
             <div
               key={i}
@@ -85,7 +85,7 @@ export default function MultiStepForm() {
                 }`}>
                 {i + 1}
               </div>
-              <span className={`text-xs uppercase tracking-wide transition-opacity ${i === step ? "text-black font-medium" : "text-black/40"
+              <span className={`hidden md:block text-[10px] tracking-[0.2em] uppercase transition-opacity ${i === step ? "text-black font-bold" : "text-black/30"
                 }`}>
                 {s.title}
               </span>
@@ -94,17 +94,17 @@ export default function MultiStepForm() {
         </div>
 
         {/* Step Content */}
-        <div className="mb-20">
+        <div className="mb-16 md:mb-24 min-h-[40vh]">
           <StepComponent formData={formData} updateForm={updateForm} errors={errors} />
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between items-center pt-8 border-t border-black/20">
+        <div className="flex justify-between items-center pt-10 border-t border-black/10">
           <button
             onClick={back}
             disabled={step === 0}
-            className={`px-8 py-3 text-xs tracking-widest uppercase border-2 transition-all ${step === 0
-                ? "border-black/10 text-black/20 cursor-not-allowed"
+            className={`px-10 py-4 text-[10px] font-bold tracking-[0.3em] uppercase border transition-all ${step === 0
+                ? "border-black/5 text-black/10 cursor-not-allowed"
                 : "border-black text-black hover:bg-black hover:text-white"
               }`}
           >
@@ -114,7 +114,7 @@ export default function MultiStepForm() {
           {step < steps.length - 1 && (
             <button
               onClick={next}
-              className="px-8 py-3 text-xs tracking-widest uppercase bg-black text-white hover:opacity-80 transition-opacity"
+              className="px-10 py-4 text-[10px] font-bold tracking-[0.3em] uppercase bg-black text-white hover:bg-black/90 transition-all border border-black shadow-lg"
             >
               Next
             </button>

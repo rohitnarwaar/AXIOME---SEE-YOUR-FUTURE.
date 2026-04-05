@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import analyzeFinance from "../utils/analyzeFinance";
@@ -21,6 +21,13 @@ import AchievementsWidget from "../components/AchievementsWidget";
 import DailyTipWidget from "../components/DailyTipWidget";
 import BudgetWidget from "../components/BudgetWidget";
 import SubscriptionsWidget from "../components/SubscriptionsWidget";
+
+// Mobile-specific components
+import MobileHeader from "../components/MobileHeader";
+import MobileNavigation from "../components/MobileNavigation";
+import DashboardMobileDaily from "../components/DashboardMobileDaily";
+import DashboardMobileWealth from "../components/DashboardMobileWealth";
+import DashboardMobileInsights from "../components/DashboardMobileInsights";
 
 export default function Dashboard() {
     const [userRole, setUserRole] = useState("admin"); // "admin" or "viewer"
@@ -49,6 +56,7 @@ export default function Dashboard() {
     const [achievements, setAchievements] = useState([]);
     const [dailyInsights, setDailyInsights] = useState(null);
     const [budgetLimit, setBudgetLimit] = useState(0);
+    const [categoryBudgets, setCategoryBudgets] = useState({});
     const [monthlySpent, setMonthlySpent] = useState(0);
     const [monthlyIncome, setMonthlyIncome] = useState(0);
     const [showAddTransaction, setShowAddTransaction] = useState(false);
@@ -120,16 +128,39 @@ export default function Dashboard() {
         };
     }, [currentUser]);
 
-    // 3. User Settings Listener (for Budget)
+    // 3. User Settings Listener (for Budget — overall + per-category)
     useEffect(() => {
         if (!currentUser?.uid) return;
         const unsubscribeSettings = onSnapshot(doc(db, "users", currentUser.uid, "settings", "budget"), (docSnap) => {
             if (docSnap.exists()) {
-                setBudgetLimit(docSnap.data().limit || 0);
+                const data = docSnap.data();
+                setBudgetLimit(data.limit || 0);
+                setCategoryBudgets(data.categories || {});
             }
         });
         return () => unsubscribeSettings();
     }, [currentUser]);
+
+    // 3b. Compute per-category spend from this month's expense transactions
+    const categorySpend = useMemo(() => {
+        if (!transactions) return {};
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const map = {};
+        transactions
+            .filter(t => {
+                const d = new Date(t.date);
+                return d.getMonth() === currentMonth &&
+                    d.getFullYear() === currentYear &&
+                    t.type === 'expense';
+            })
+            .forEach(t => {
+                const cat = t.category || 'Other';
+                map[cat] = (map[cat] || 0) + (parseFloat(t.amount) || 0);
+            });
+        return map;
+    }, [transactions]);
 
     // 4. Calculate Monthly Spent
     useEffect(() => {
@@ -428,13 +459,25 @@ export default function Dashboard() {
     const handleSetBudget = async (limit) => {
         if (!currentUser?.uid) return;
         try {
-            // Write to settings subcollection
             const settingsRef = doc(db, "users", currentUser.uid, "settings", "budget");
-            // Use setDoc with merge: true or just setDoc, settings might not exist
-            const { setDoc } = await import("firebase/firestore");
-            await setDoc(settingsRef, { limit }, { merge: true });
+            const { setDoc: fsSetDoc } = await import("firebase/firestore");
+            await fsSetDoc(settingsRef, { limit }, { merge: true });
         } catch (error) {
             console.error("Failed to set budget:", error);
+        }
+    };
+
+    // Set a single category's budget, then auto-compute overall limit
+    const handleSetCategoryBudget = async (category, amount) => {
+        if (!currentUser?.uid) return;
+        try {
+            const updated = { ...categoryBudgets, [category]: parseFloat(amount) || 0 };
+            const autoLimit = Object.values(updated).reduce((s, v) => s + v, 0);
+            const settingsRef = doc(db, "users", currentUser.uid, "settings", "budget");
+            const { setDoc: fsSetDoc } = await import("firebase/firestore");
+            await fsSetDoc(settingsRef, { categories: updated, limit: autoLimit }, { merge: true });
+        } catch (error) {
+            console.error("Failed to set category budget:", error);
         }
     };
 
@@ -470,6 +513,85 @@ export default function Dashboard() {
             console.error("Failed to delete subscription:", error);
         }
     };
+
+    // --- Auto-pay: Create transactions for due subscriptions ---
+    const autoPayProcessedRef = useRef(new Set());
+
+    useEffect(() => {
+        if (!currentUser?.uid || !subscriptions || subscriptions.length === 0) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+
+        const processAutoPayments = async () => {
+            for (const sub of subscriptions) {
+                if (sub.status !== 'active' || !sub.nextBillingDate) continue;
+
+                // Skip if already processed in this browser session
+                const sessionKey = `${sub.id}_${sub.nextBillingDate}`;
+                if (autoPayProcessedRef.current.has(sessionKey)) continue;
+
+                const billingDate = new Date(sub.nextBillingDate);
+                billingDate.setHours(0, 0, 0, 0);
+
+                // Skip if billing date is in the future
+                if (billingDate > today) continue;
+
+                // Skip if already auto-logged for this billing cycle (persisted check)
+                if (sub.lastAutoLogged) {
+                    const lastLogged = new Date(sub.lastAutoLogged);
+                    lastLogged.setHours(0, 0, 0, 0);
+                    if (lastLogged >= billingDate) {
+                        autoPayProcessedRef.current.add(sessionKey);
+                        continue;
+                    }
+                }
+
+                // Mark as processed BEFORE writing to prevent re-entry
+                autoPayProcessedRef.current.add(sessionKey);
+
+                try {
+                    // 1. Create the transaction
+                    await addDoc(collection(db, "users", currentUser.uid, "transactions"), {
+                        amount: parseFloat(sub.amount) || 0,
+                        category: 'Subscription',
+                        description: `${sub.name} (auto-pay)`,
+                        type: 'expense',
+                        date: new Date(sub.nextBillingDate).toISOString(),
+                        createdAt: serverTimestamp(),
+                        autoGenerated: true,
+                        subscriptionId: sub.id,
+                    });
+
+                    // 2. Advance the nextBillingDate
+                    const next = new Date(sub.nextBillingDate);
+                    if (sub.billingCycle === 'yearly') {
+                        next.setFullYear(next.getFullYear() + 1);
+                    } else if (sub.billingCycle === 'weekly') {
+                        next.setDate(next.getDate() + 7);
+                    } else {
+                        next.setMonth(next.getMonth() + 1);
+                    }
+
+                    // 3. Mark as auto-logged and update next date
+                    const subRef = doc(db, "users", currentUser.uid, "subscriptions", sub.id);
+                    await updateDoc(subRef, {
+                        nextBillingDate: next.toISOString(),
+                        lastAutoLogged: new Date().toISOString(),
+                    });
+
+                    console.log(`Auto-pay: ${sub.name} → ₹${sub.amount} logged, next: ${next.toLocaleDateString()}`);
+                } catch (error) {
+                    console.error(`Auto-pay failed for ${sub.name}:`, error);
+                    // Remove from processed so it can retry
+                    autoPayProcessedRef.current.delete(sessionKey);
+                }
+            }
+        };
+
+        processAutoPayments();
+    }, [currentUser, subscriptions]);
 
     // React to data changes to update insights
     useEffect(() => {
@@ -653,35 +775,111 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-white text-black flex" style={{ fontFamily: '"Source Code Pro", monospace' }}>
 
-            {/* Mobile Hamburger Button */}
-            <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="fixed top-5 left-5 z-50 md:hidden w-10 h-10 flex flex-col items-center justify-center gap-1.5 bg-white border border-black/10 shadow-sm"
-            >
-                <motion.span
-                    animate={sidebarOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
-                    className="block w-5 h-px bg-black"
-                />
-                <motion.span
-                    animate={sidebarOpen ? { opacity: 0 } : { opacity: 1 }}
-                    className="block w-5 h-px bg-black"
-                />
-                <motion.span
-                    animate={sidebarOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
-                    className="block w-5 h-px bg-black"
-                />
-            </button>
 
-            {/* Mobile Overlay */}
-            {sidebarOpen && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setSidebarOpen(false)}
-                    className="fixed inset-0 bg-black/20 z-30 md:hidden"
+            {/* ========== MOBILE LAYOUT ========== */}
+            <div className="md:hidden w-full bg-white min-h-screen font-mono">
+                <MobileHeader 
+                    onMenuClick={() => setSidebarOpen(true)} 
+                    userName={userName}
                 />
-            )}
+
+                <main className="w-full">
+                    <motion.div
+                        key={`mobile-${activeView}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.4 }}
+                    >
+                        {activeView === "daily" && (
+                            <DashboardMobileDaily 
+                                transactions={transactions}
+                                monthlyIncome={monthlyIncome}
+                                monthlySpent={monthlySpent}
+                                dailyInsights={dailyInsights}
+                                subscriptions={subscriptions}
+                                formData={formData}
+                                goals={goals}
+                                streaks={streaks}
+                                achievements={achievements}
+                                budgetLimit={budgetLimit}
+                                categorySpend={categorySpend}
+                                categoryBudgets={categoryBudgets}
+                                userRole={userRole}
+                                currentUser={currentUser}
+                                onCreateGoal={handleCreateGoal}
+                                onSetBudget={handleSetBudget}
+                                onSetCategoryBudget={handleSetCategoryBudget}
+                                onAddSubscription={handleAddSubscription}
+                                onUpdateSubscription={handleUpdateSubscription}
+                                onDeleteSubscription={handleDeleteSubscription}
+                                onRefreshInsights={fetchDailyInsights}
+                                showAddTransaction={showAddTransaction}
+                                setShowAddTransaction={setShowAddTransaction}
+                                onTransactionAdded={handleTransactionAdded}
+                            />
+                        )}
+
+                        {activeView === "wealth" && (
+                            <DashboardMobileWealth 
+                                forecastData={forecastData}
+                                formData={formData}
+                                spendingClusters={spendingClusters}
+                                monthlySpent={monthlySpent}
+                                monthlyIncome={monthlyIncome}
+                                insights={insights}
+                            />
+                        )}
+
+                        {activeView === "insights" && (
+                            <DashboardMobileInsights 
+                                loanData={loanData}
+                                retirementData={retirementData}
+                                deltaSavings={deltaSavings}
+                                setDeltaSavings={setDeltaSavings}
+                                runSimulation={runSimulation}
+                                simulateData={simulateData}
+                                userRole={userRole}
+                            />
+                        )}
+
+                        {activeView === "profile" && (
+                            <div className="flex flex-col items-center justify-center min-h-screen px-6 space-y-8 pt-20 pb-32">
+                                <div className="w-24 h-24 bg-black/[0.03] border border-black/5 flex items-center justify-center overflow-hidden">
+                                    <span className="text-4xl uppercase opacity-40 font-bold">{userName?.charAt(0) || 'U'}</span>
+                                </div>
+                                <div className="text-center space-y-2">
+                                    <p className="text-sm tracking-[0.2em] font-bold uppercase opacity-30 italic">User Profile</p>
+                                    <h2 className="text-2xl font-bold tracking-tight">{userName}</h2>
+                                    <p className="text-xs opacity-40 uppercase tracking-widest">{currentUser?.email}</p>
+                                </div>
+                                <div className="w-full space-y-3 pt-10">
+                                    <button 
+                                        onClick={() => navigate('/')}
+                                        className="w-full bg-black text-white py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-black/90 transition-all border border-black"
+                                    >
+                                        Home
+                                    </button>
+                                    <button 
+                                        onClick={handleLogout}
+                                        className="w-full bg-white text-red-500 py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-red-50 transition-all border border-red-500/10"
+                                    >
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </motion.div>
+                </main>
+
+                <MobileNavigation 
+                    activeView={activeView} 
+                    onTabChange={setActiveView} 
+                />
+            </div>
+
+
+            {/* ========== DESKTOP LAYOUT (Perfect as it is) ========== */}
+            <div className="hidden md:flex w-full min-h-screen">
 
             {/* ========== SIDEBAR (Left) ========== */}
             <motion.aside
@@ -1098,7 +1296,15 @@ export default function Dashboard() {
                                 <div className="grid grid-cols-1 md:grid-cols-[1fr_400px] gap-12 mb-16 items-start">
                                     {/* Left Stack: Primary Controls */}
                                     <div className="space-y-16">
-                                        <BudgetWidget totalSpent={monthlySpent} budgetLimit={budgetLimit} onSetBudget={handleSetBudget} disabled={userRole === 'viewer'} />
+                                        <BudgetWidget
+                                            totalSpent={monthlySpent}
+                                            budgetLimit={budgetLimit}
+                                            onSetBudget={handleSetBudget}
+                                            categorySpend={categorySpend}
+                                            categoryBudgets={categoryBudgets}
+                                            onSetCategoryBudget={handleSetCategoryBudget}
+                                            disabled={userRole === 'viewer'}
+                                        />
                                         <div className="h-px bg-black opacity-[0.05]" />
                                         <GoalsWidget goals={goals} onCreateGoal={handleCreateGoal} disabled={userRole === 'viewer'} />
                                     </div>
@@ -1144,85 +1350,22 @@ export default function Dashboard() {
                         </div>
                     )}
 
-                    {/* Mobile-only stacks for Right-panel components */}
-                    <div className="lg:hidden mt-16 pt-16 border-t border-black/10 space-y-16">
-                        {activeView === "wealth" && (
-                            <>
-                                {/* Monthly Breakdown (Mobile Stack) */}
-                                <div className="bg-black/[0.01] border border-black/5 p-8 rounded-sm mb-12">
-                                    <h3 className="text-[10px] tracking-widest uppercase opacity-40 mb-6">This Month Breakdown</h3>
-                                    <div className="h-48 relative flex items-center justify-center">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={hasData ? pieData : [{ value: 1 }]}
-                                                    innerRadius={60}
-                                                    outerRadius={80}
-                                                    paddingAngle={5}
-                                                    dataKey="value"
-                                                    stroke="none"
-                                                >
-                                                    {hasData ? (
-                                                        pieData.map((entry, index) => (
-                                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                                        ))
-                                                    ) : (
-                                                        <Cell fill="#f3f4f6" />
-                                                    )}
-                                                </Pie>
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                            {hasData ? (
-                                                <span className={`text-sm font-mono ${netCashflow >= 0 ? 'text-black' : 'text-red-500'}`}>
-                                                    ₹{Math.abs(Math.round(netCashflow)).toLocaleString()}
-                                                </span>
-                                            ) : (
-                                                <span className="text-[10px] uppercase opacity-30">No Data</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
+                    </motion.div>
+                </main>
 
-                                <div>
-                                    <h3 className="text-xs uppercase tracking-widest mb-6 opacity-40">Spending Tiers</h3>
-                                    <div className="space-y-4">
-                                        {spendingClusters.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between py-2 border-b border-black/5 text-sm uppercase">
-                                                <span>{item.category}</span>
-                                                <span className="font-mono">₹{item.amount}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                        {activeView === "daily" && (
-                            <>
-                                <TodaySummaryWidget todaySummary={dailyInsights?.todaySummary} />
-                                <div className="bg-black/[0.01] p-6 border border-black/5">
-                                    <DailyTipWidget userData={formData} transactions={transactions} />
-                                </div>
-                                <StreaksWidget streaks={streaks} />
-                                <AchievementsWidget achievements={achievements} />
-                            </>
-                        )}
-                    </div>
-                </motion.div>
-            </main>
-
-            {/* Floating Add Transaction Button */}
-            {activeView === "daily" && userRole === 'admin' && (
-                <motion.button
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.5, type: "spring" }}
-                    onClick={() => setShowAddTransaction(true)}
-                    className="fixed bottom-8 right-8 w-16 h-16 bg-black text-white rounded-full flex items-center justify-center text-2xl shadow-lg hover:scale-110 transition-transform z-30"
-                >
-                    +
-                </motion.button>
-            )}
+                {/* Floating Add Transaction Button (Desktop Only - Mobile has it in navigation or drawer) */}
+                {activeView === "daily" && userRole === 'admin' && (
+                    <motion.button
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.5, type: "spring" }}
+                        onClick={() => setShowAddTransaction(true)}
+                        className="fixed bottom-8 right-8 w-16 h-16 bg-black text-white rounded-full flex items-center justify-center text-2xl shadow-lg hover:scale-110 transition-transform z-30"
+                    >
+                        +
+                    </motion.button>
+                )}
+            </div>
 
             <QuickAddTransaction
                 isOpen={showAddTransaction}

@@ -16,23 +16,23 @@ export default function StepExpenses({ formData, updateForm, errors }) {
       transition={{ duration: 0.6 }}
       style={{ fontFamily: '"Source Code Pro", monospace' }}
     >
-      <h2 className="text-sm tracking-widest uppercase mb-12 text-black font-medium">MONTHLY EXPENSES</h2>
+      <h2 className="text-[10px] tracking-[0.3em] font-bold uppercase mb-10 text-black/40 italic">Monthly Expenses</h2>
 
-      <div className="space-y-6">
+      <div className="space-y-12">
         {fields.map(({ label, key }) => (
           <div key={key}>
-            <label className="block mb-4 text-xs tracking-wide uppercase text-black/80 font-medium">
+            <label className="text-[10px] tracking-widest font-bold uppercase text-black/30 block mb-3">
               {label} (₹)
             </label>
             <input
               type="number"
               value={formData[key] || ""}
               onChange={(e) => updateForm({ [key]: e.target.value })}
-              className="w-full p-4 border-2 border-black/20 text-base text-black placeholder:text-black/30 focus:outline-none focus:border-black transition-colors"
-              placeholder={`Enter ${label.toLowerCase()}`}
+              className="w-full bg-transparent border-b-2 border-black/10 text-black px-0 py-4 text-xl font-bold focus:outline-none focus:border-black transition-all placeholder-black/5 font-mono"
+              placeholder="0.00"
             />
             {errors?.[key] && (
-              <p className="text-red-600 text-xs mt-2 tracking-wide">{errors[key]}</p>
+              <p className="text-red-600 text-[10px] mt-2 tracking-widest uppercase font-bold">{errors[key]}</p>
             )}
           </div>
         ))}

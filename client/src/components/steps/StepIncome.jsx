@@ -8,18 +8,19 @@ export default function StepIncome({ formData, updateForm, errors }) {
       transition={{ duration: 0.6 }}
       style={{ fontFamily: '"Source Code Pro", monospace' }}
     >
-      <h2 className="text-sm tracking-widest uppercase mb-12 text-black font-medium">INCOME DETAILS</h2>
+      <h2 className="text-[10px] tracking-[0.3em] font-bold uppercase mb-10 text-black/40 italic">Income Details</h2>
 
-      <div className="mb-8">
-        <label className="block mb-4 text-xs tracking-wide uppercase text-black/80 font-medium">
+      <div className="mb-10">
+        <label className="text-[10px] tracking-widest font-bold uppercase text-black/30 block mb-3">
           Monthly Income (₹)
         </label>
         <input
           type="number"
           value={formData.income || ""}
           onChange={(e) => updateForm({ income: e.target.value })}
-          className="w-full p-4 border-2 border-black/20 text-base text-black placeholder:text-black/30 focus:outline-none focus:border-black transition-colors"
-          placeholder="Enter your monthly income"
+          className="w-full bg-transparent border-b-2 border-black/10 text-black px-0 py-4 text-3xl font-bold focus:outline-none focus:border-black transition-all placeholder-black/5 font-mono"
+          placeholder="0.00"
+          autoFocus
         />
         {errors?.income && (
           <p className="text-red-600 text-xs mt-2 tracking-wide">{errors.income}</p>

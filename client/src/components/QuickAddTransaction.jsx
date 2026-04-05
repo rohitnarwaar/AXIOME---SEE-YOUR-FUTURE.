@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../firebase'; // Import Firestore instance
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; // Import Firestore functions
+import useIsMobile from '../hooks/useIsMobile';
 
 export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUser }) {
+    const isMobile = useIsMobile();
     const [type, setType] = useState('expense'); // 'expense' or 'income'
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('Food');
@@ -12,7 +14,7 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    const expenseCategories = ['Food', 'Transport', 'Shopping', 'Utilities', 'Entertainment', 'Health', 'Other'];
+    const expenseCategories = ['Food / Grocery', 'Dine out / Outing', 'Travel', 'Shopping', 'Personal Care', 'Subscription', 'Misc'];
     const incomeCategories = ['Salary', 'Freelance', 'Investment', 'Gift', 'Other'];
 
     const handleTypeChange = (newType) => {
@@ -21,6 +23,7 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
     };
 
     const handleSubmit = async (e) => {
+        // ... (existing logic)
         e.preventDefault();
 
         if (!amount || parseFloat(amount) <= 0) {
@@ -36,14 +39,6 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
         try {
             setLoading(true);
 
-            console.log('Adding transaction to Firestore:', {
-                userId: currentUser.uid,
-                amount: parseFloat(amount),
-                category,
-                description,
-                type
-            });
-
             // Write directly to Firestore
             const docRef = await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
                 amount: parseFloat(amount),
@@ -54,12 +49,9 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                 createdAt: serverTimestamp()
             });
 
-            console.log('Transaction written with ID: ', docRef.id);
-
             setSuccess(true);
 
             setTimeout(() => {
-                // Pass the new transaction to parent if needed (optional now since listener will catch it)
                 if (onAdd) onAdd({
                     id: docRef.id,
                     amount: parseFloat(amount),
@@ -69,23 +61,27 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                     date: new Date(date).toISOString()
                 });
 
-                // Reset form for next entry
                 setAmount('');
-                // Keep the same type for convenience, or reset? Let's keep same type.
-                // setType('expense'); 
                 setCategory(type === 'expense' ? expenseCategories[0] : incomeCategories[0]);
                 setDescription('');
                 setSuccess(false);
                 setLoading(false);
-
-                // Do NOT close automatically - Keep open for multiple entries
-                // onClose(); 
             }, 800);
         } catch (error) {
             console.error('Error adding transaction:', error);
             alert(`Failed: ${error.message}`);
             setLoading(false);
         }
+    };
+
+    const variants = isMobile ? {
+        hidden: { y: "100%", opacity: 1 },
+        visible: { y: 0, opacity: 1 },
+        exit: { y: "100%", opacity: 1 }
+    } : {
+        hidden: { scale: 0.9, opacity: 0 },
+        visible: { scale: 1, opacity: 1 },
+        exit: { scale: 0.9, opacity: 0 }
     };
 
     return (
@@ -95,37 +91,52 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-[100]"
                     onClick={onClose}
                     style={{ fontFamily: '"Source Code Pro", monospace' }}
                 >
                     <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        className="bg-black border-2 border-white p-8 max-w-md w-full mx-4"
+                        variants={variants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                        className={`bg-white text-black p-8 md:p-10 w-full max-w-lg shadow-2xl relative ${
+                            isMobile ? 'rounded-t-[32px] pb-12' : 'border border-black/5 rounded-sm m-4'
+                        }`}
                         onClick={(e) => e.stopPropagation()}
                     >
+                        {/* Drag Handle for Mobile */}
+                        {isMobile && (
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-black/10 rounded-full" />
+                        )}
+
+                        <button 
+                            onClick={onClose}
+                            className="absolute top-6 right-6 p-2 opacity-30 hover:opacity-100 transition-opacity"
+                        >
+                            ✕
+                        </button>
                         {success ? (
                             <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
-                                className="text-center py-8 text-white"
+                                className="text-center py-12 text-black"
                             >
-                                <div className="text-5xl mb-3">✓</div>
-                                <div className="text-base tracking-wide">Transaction Added!</div>
+                                <div className="text-6xl mb-4">●</div>
+                                <div className="text-xs font-bold tracking-[0.3em] uppercase">Entry Logged</div>
                             </motion.div>
                         ) : (
                             <>
-                                <h2 className="text-xl tracking-wide uppercase mb-6 text-white">Quick Add Transaction</h2>
+                                <h2 className="text-xs tracking-[0.3em] font-bold uppercase mb-10 text-black/40 italic">New Command</h2>
 
                                 <form onSubmit={handleSubmit}>
                                     {/* Type Toggle */}
-                                    <div className="flex gap-4 mb-6">
+                                    <div className="flex gap-4 mb-8">
                                         <button
                                             type="button"
                                             onClick={() => handleTypeChange('expense')}
-                                            className={`flex-1 py-2 text-xs tracking-widest uppercase border border-white transition-colors ${type === 'expense' ? 'bg-white text-black' : 'bg-transparent text-white opacity-50 hover:opacity-100'
+                                            className={`flex-1 py-3 text-[10px] tracking-widest uppercase border border-black transition-all ${type === 'expense' ? 'bg-black text-white px-6' : 'bg-transparent text-black opacity-30 hover:opacity-100'
                                                 }`}
                                         >
                                             Money Out
@@ -133,7 +144,7 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                                         <button
                                             type="button"
                                             onClick={() => handleTypeChange('income')}
-                                            className={`flex-1 py-2 text-xs tracking-widest uppercase border border-white transition-colors ${type === 'income' ? 'bg-white text-black' : 'bg-transparent text-white opacity-50 hover:opacity-100'
+                                            className={`flex-1 py-3 text-[10px] tracking-widest uppercase border border-black transition-all ${type === 'income' ? 'bg-black text-white px-6' : 'bg-transparent text-black opacity-30 hover:opacity-100'
                                                 }`}
                                         >
                                             Money In
@@ -141,40 +152,40 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                                     </div>
 
                                     {/* Amount */}
-                                    <div className="mb-6">
-                                        <label className="text-xs tracking-wide uppercase text-white opacity-80 block mb-2">
-                                            Amount (₹)
+                                    <div className="mb-8">
+                                        <label className="text-[10px] tracking-widest font-bold uppercase text-black/30 block mb-3">
+                                            Quantity (₹)
                                         </label>
                                         <input
                                             type="number"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="500"
-                                            className="w-full bg-transparent border-2 border-white text-white p-3 text-2xl focus:outline-none placeholder-white placeholder-opacity-30"
+                                            placeholder="0.00"
+                                            className="w-full bg-transparent border-b-2 border-black text-black px-0 py-4 text-4xl font-bold focus:outline-none placeholder-black/5 font-mono"
                                             autoFocus
                                         />
                                     </div>
 
                                     {/* Category */}
-                                    <div className="mb-6">
-                                        <label className="text-xs tracking-wide uppercase text-white opacity-80 block mb-2">
-                                            Category
+                                    <div className="mb-8">
+                                        <label className="text-[10px] tracking-widest font-bold uppercase text-black/30 block mb-3">
+                                            Classification
                                         </label>
                                         <select
                                             value={category}
                                             onChange={(e) => setCategory(e.target.value)}
-                                            className="w-full bg-black border-2 border-white text-white p-3 text-sm focus:outline-none"
+                                            className="w-full bg-transparent border border-black/10 text-black p-4 text-xs font-bold uppercase tracking-widest focus:outline-none appearance-none cursor-pointer"
                                         >
                                             {(type === 'expense' ? expenseCategories : incomeCategories).map(cat => (
-                                                <option key={cat} value={cat} className="bg-black text-white">{cat}</option>
+                                                <option key={cat} value={cat} className="bg-white text-black">{cat}</option>
                                             ))}
                                         </select>
                                     </div>
 
-                                    {/* Aesthetic Date Selector Chips */}
-                                    <div className="mb-6">
-                                        <label className="text-xs tracking-wide uppercase text-white opacity-80 block mb-3">
-                                            Transaction Date
+                                    {/* Date Selector */}
+                                    <div className="mb-8">
+                                        <label className="text-[10px] tracking-widest font-bold uppercase text-black/30 block mb-3">
+                                            Temporal Marker
                                         </label>
                                         <div className="flex gap-2">
                                             {[
@@ -185,28 +196,27 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                                                     key={opt.label}
                                                     type="button"
                                                     onClick={() => setDate(opt.value)}
-                                                    className={`px-4 py-2 text-[10px] tracking-widest uppercase border border-white transition-all ${date === opt.value ? 'bg-white text-black font-bold' : 'bg-transparent text-white opacity-40 hover:opacity-100'
+                                                    className={`px-4 py-2 text-[10px] font-bold tracking-widest uppercase border border-black/5 transition-all ${date === opt.value ? 'bg-black text-white border-black' : 'bg-transparent text-black opacity-30 hover:opacity-100'
                                                         }`}
                                                 >
                                                     {opt.label}
                                                 </button>
                                             ))}
                                             
-                                            {/* Custom Date Chip with Hidden Input */}
                                             <div className="relative flex-1">
                                                 <button
                                                     type="button"
-                                                    className={`w-full py-2 text-[10px] tracking-widest uppercase border border-white transition-all ${
+                                                    className={`w-full py-2 text-[10px] font-bold tracking-widest uppercase border border-black/5 transition-all ${
                                                         date !== new Date().toISOString().split('T')[0] && 
                                                         date !== new Date(Date.now() - 86400000).toISOString().split('T')[0]
-                                                        ? 'bg-white text-black font-bold' : 'bg-transparent text-white opacity-40 hover:opacity-100'
+                                                        ? 'bg-black text-white border-black' : 'bg-transparent text-black opacity-30 hover:opacity-100'
                                                     }`}
                                                     onClick={() => document.getElementById('custom-date-picker').showPicker()}
                                                 >
                                                     {date !== new Date().toISOString().split('T')[0] && 
                                                      date !== new Date(Date.now() - 86400000).toISOString().split('T')[0]
                                                      ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-                                                     : 'Pick Date'}
+                                                     : 'Select'}
                                                 </button>
                                                 <input
                                                     id="custom-date-picker"
@@ -220,37 +230,27 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                                     </div>
 
                                     {/* Description */}
-                                    <div className="mb-8">
-                                        <label className="text-xs tracking-wide uppercase text-white opacity-80 block mb-2">
-                                            Description (Optional)
+                                    <div className="mb-10">
+                                        <label className="text-[10px] tracking-widest font-bold uppercase text-black/30 block mb-3">
+                                            Context
                                         </label>
                                         <input
                                             type="text"
                                             value={description}
                                             onChange={(e) => setDescription(e.target.value)}
-                                            placeholder={type === 'expense' ? "Lunch at cafe" : "Monthly Salary"}
-                                            className="w-full bg-transparent border-2 border-white text-white p-3 text-sm focus:outline-none placeholder-white placeholder-opacity-30"
+                                            placeholder="..."
+                                            className="w-full bg-transparent border-b border-black/10 text-black px-0 py-3 text-xs focus:outline-none placeholder-black/10 italic"
                                         />
                                     </div>
 
-                                    {/* Buttons */}
-                                    <div className="flex gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={onClose}
-                                            className="flex-1 py-3 border-2 border-white text-white text-xs tracking-widest uppercase hover:bg-white hover:bg-opacity-10 transition-colors"
-                                            disabled={loading}
-                                        >
-                                            Close
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="flex-1 py-3 bg-white text-black text-xs tracking-widest uppercase hover:bg-opacity-90 transition-colors disabled:opacity-50"
-                                            disabled={loading}
-                                        >
-                                            {loading ? 'Adding...' : 'Add'}
-                                        </button>
-                                    </div>
+                                    {/* Submit */}
+                                    <button
+                                        type="submit"
+                                        className="w-full py-5 bg-black text-white text-[10px] font-bold uppercase tracking-[0.4em] hover:bg-black/90 transition-all disabled:opacity-50"
+                                        disabled={loading}
+                                    >
+                                        {loading ? 'Processing...' : 'Execute Entry'}
+                                    </button>
                                 </form>
                             </>
                         )}
