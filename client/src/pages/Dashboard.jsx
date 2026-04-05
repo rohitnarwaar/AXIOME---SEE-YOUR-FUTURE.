@@ -7,7 +7,7 @@ import {
     PieChart, Pie, Cell
 } from "recharts";
 import { db } from "../firebase";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc, onSnapshot, addDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 
 // Daily-use feature components
@@ -20,6 +20,7 @@ import StreaksWidget from "../components/StreaksWidget";
 import AchievementsWidget from "../components/AchievementsWidget";
 import DailyTipWidget from "../components/DailyTipWidget";
 import BudgetWidget from "../components/BudgetWidget";
+import SubscriptionsWidget from "../components/SubscriptionsWidget";
 
 export default function Dashboard() {
     const [userRole, setUserRole] = useState("admin"); // "admin" or "viewer"
@@ -42,6 +43,7 @@ export default function Dashboard() {
 
     // Daily-use feature state
     const [transactions, setTransactions] = useState([]);
+    const [subscriptions, setSubscriptions] = useState([]);
     const [goals, setGoals] = useState([]);
     const [streaks, setStreaks] = useState(null);
     const [achievements, setAchievements] = useState([]);
@@ -96,9 +98,25 @@ export default function Dashboard() {
             console.error("Error fetching goals:", error);
         });
 
+        // 3. Subscriptions Listener
+        const qSubscriptions = query(
+            collection(db, "users", currentUser.uid, "subscriptions"),
+            orderBy("createdAt", "desc")
+        );
+        const unsubscribeSubscriptions = onSnapshot(qSubscriptions, (snapshot) => {
+            const subsData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setSubscriptions(subsData);
+        }, (error) => {
+            console.error("Error fetching subscriptions:", error);
+        });
+
         return () => {
             unsubscribeTransactions();
             unsubscribeGoals();
+            unsubscribeSubscriptions();
         };
     }, [currentUser]);
 
@@ -386,8 +404,8 @@ export default function Dashboard() {
     };
 
     const handleTransactionAdded = (transaction) => {
-        // No manual state update needed, Firestore listener handles it
-        // setShowAddTransaction(false); // <--- Removed to keep modal open for multiple adds
+        // Close modal after addition as requested
+        setShowAddTransaction(false);
     };
 
     const handleCreateGoal = async (goalData) => {
@@ -417,6 +435,39 @@ export default function Dashboard() {
             await setDoc(settingsRef, { limit }, { merge: true });
         } catch (error) {
             console.error("Failed to set budget:", error);
+        }
+    };
+
+    // --- Subscription CRUD ---
+    const handleAddSubscription = async (subData) => {
+        if (!currentUser?.uid) return;
+        try {
+            await addDoc(collection(db, "users", currentUser.uid, "subscriptions"), {
+                ...subData,
+                startDate: new Date().toISOString(),
+                createdAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Failed to add subscription:", error);
+        }
+    };
+
+    const handleUpdateSubscription = async (id, updates) => {
+        if (!currentUser?.uid) return;
+        try {
+            const subRef = doc(db, "users", currentUser.uid, "subscriptions", id);
+            await updateDoc(subRef, updates);
+        } catch (error) {
+            console.error("Failed to update subscription:", error);
+        }
+    };
+
+    const handleDeleteSubscription = async (id) => {
+        if (!currentUser?.uid) return;
+        try {
+            await deleteDoc(doc(db, "users", currentUser.uid, "subscriptions", id));
+        } catch (error) {
+            console.error("Failed to delete subscription:", error);
         }
     };
 
@@ -1043,10 +1094,23 @@ export default function Dashboard() {
                                     <DailyScoreWidget userData={formData} transactions={transactions} />
                                 </div>
 
-                                {/* Budget & Goals Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                                    <BudgetWidget totalSpent={monthlySpent} budgetLimit={budgetLimit} onSetBudget={handleSetBudget} disabled={userRole === 'viewer'} />
-                                    <GoalsWidget goals={goals} onCreateGoal={handleCreateGoal} disabled={userRole === 'viewer'} />
+                                {/* Daily Financial Architecture: Stacked Budget/Goals + Subscriptions Side-by-Side */}
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_400px] gap-12 mb-16 items-start">
+                                    {/* Left Stack: Primary Controls */}
+                                    <div className="space-y-16">
+                                        <BudgetWidget totalSpent={monthlySpent} budgetLimit={budgetLimit} onSetBudget={handleSetBudget} disabled={userRole === 'viewer'} />
+                                        <div className="h-px bg-black opacity-[0.05]" />
+                                        <GoalsWidget goals={goals} onCreateGoal={handleCreateGoal} disabled={userRole === 'viewer'} />
+                                    </div>
+
+                                    {/* Right: Recurring Commitments */}
+                                    <SubscriptionsWidget
+                                        subscriptions={subscriptions}
+                                        onAdd={handleAddSubscription}
+                                        onUpdate={handleUpdateSubscription}
+                                        onDelete={handleDeleteSubscription}
+                                        disabled={userRole === 'viewer'}
+                                    />
                                 </div>
 
                                 <div className="h-px bg-black opacity-[0.05] mb-12" />
