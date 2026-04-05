@@ -66,20 +66,29 @@ export default function StepReview({ formData }) {
       transition={{ duration: 0.6 }}
       style={{ fontFamily: '"Source Code Pro", monospace' }}
     >
-      <h2 className="text-xs tracking-widest uppercase mb-8 text-black/70">REVIEW YOUR DETAILS</h2>
+      <h2 className="text-[10px] tracking-[0.3em] font-bold uppercase mb-10 text-black/40 italic">Review Your Details</h2>
 
-      <div className="mb-8 max-w-2xl">{formattedEntries}</div>
+      <div className="mb-12 space-y-2">
+        {Object.entries(formData).map(([key, value]) => (
+          <div key={key} className="flex justify-between py-4 border-b border-black/5">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-black/30">
+              {key.replace(/([A-Z])/g, " $1")}
+            </span>
+            <span className="text-xs font-bold font-mono text-black">{value || "---"}</span>
+          </div>
+        ))}
+      </div>
 
       {error && (
-        <p className="text-red-600 text-xs mb-4 tracking-wide">{error}</p>
+        <p className="text-red-600 text-[10px] mb-6 tracking-widest uppercase font-bold">{error}</p>
       )}
 
       <button
         onClick={handleSubmit}
         disabled={loading}
-        className="px-8 py-3 bg-black text-white text-xs tracking-widest uppercase hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-5 bg-black text-white text-[10px] font-bold uppercase tracking-[0.4em] hover:bg-black/90 transition-all border border-black shadow-xl disabled:opacity-50"
       >
-        {loading ? "Submitting..." : "Submit & View Dashboard"}
+        {loading ? "SUBMITTING..." : "SUBMIT & VIEW DASHBOARD"}
       </button>
     </motion.div>
   );
