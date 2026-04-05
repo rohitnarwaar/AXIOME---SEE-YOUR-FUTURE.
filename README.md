@@ -8,6 +8,19 @@ LifeLedger (rebranded as ONE'S OWN in the UI) is a cutting-edge personal finance
 
 ---
 
+## 🎯 Assignment Implementation Notes
+This project has been built to meet and exceed the requirements for the **Finance Dashboard UI** evaluation. 
+
+**How Core Requirements are Met:**
+1. **Dashboard Overview:** Displays multiple active components including Net Worth Area charts, Debt Freedom trackers, AI insight text blocks, and Categorical Spending ML Clusters.
+2. **Transactions Section:** Includes a robust list of recent transactions mapped directly from Firebase. **Includes full Search, Category Filtering, and Value Sorting.**
+3. **Role-Based UI:** At the top navigation bar, there is a **Role Switcher** dropdown. Toggling it from Admin to Viewer immediately disables the "Add Transaction" button, the "Set Budget" inputs, the "Simulator", and "Create Goal" features.
+4. **Insights Section:** Uses Google Gemini (via Python backend) to provide incredibly deep portfolio insights. Also includes daily streaks and goal tracking.
+5. **State Management:** Uses React Context (`AuthContext`) for global user state and Firebase Real-Time Listeners (`onSnapshot`) for instant UI updates when data changes across devices.
+6. **Optional Enhancements Included:** Live Database Persistence (Firestore), AI API Integration, Machine Learning (K-Means Clustering), and Premium Framer Motion Animations.
+
+---
+
 ## 🌟 Key Features
 
 ### 1. **Real-time Financial Digital Twin**

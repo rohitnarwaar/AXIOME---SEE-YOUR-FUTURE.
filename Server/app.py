@@ -135,7 +135,7 @@ def clusters_route():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# ---------- AI Narrative (Groq) ----------
+# ---------- AI Advisor (Logic Engine) ----------
 @app.route("/analyze", methods=["POST"])
 def analyze_route():
     try:

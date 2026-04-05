@@ -8,6 +8,7 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
     const [amount, setAmount] = useState('');
     const [category, setCategory] = useState('Food');
     const [description, setDescription] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
 
@@ -49,7 +50,7 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                 category,
                 description,
                 type,
-                date: new Date().toISOString(),
+                date: new Date(date).toISOString(),
                 createdAt: serverTimestamp()
             });
 
@@ -65,7 +66,7 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                     category,
                     description,
                     type,
-                    date: new Date().toISOString()
+                    date: new Date(date).toISOString()
                 });
 
                 // Reset form for next entry
@@ -168,6 +169,54 @@ export default function QuickAddTransaction({ isOpen, onClose, onAdd, currentUse
                                                 <option key={cat} value={cat} className="bg-black text-white">{cat}</option>
                                             ))}
                                         </select>
+                                    </div>
+
+                                    {/* Aesthetic Date Selector Chips */}
+                                    <div className="mb-6">
+                                        <label className="text-xs tracking-wide uppercase text-white opacity-80 block mb-3">
+                                            Transaction Date
+                                        </label>
+                                        <div className="flex gap-2">
+                                            {[
+                                                { label: 'Today', value: new Date().toISOString().split('T')[0] },
+                                                { label: 'Yesterday', value: new Date(Date.now() - 86400000).toISOString().split('T')[0] }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.label}
+                                                    type="button"
+                                                    onClick={() => setDate(opt.value)}
+                                                    className={`px-4 py-2 text-[10px] tracking-widest uppercase border border-white transition-all ${date === opt.value ? 'bg-white text-black font-bold' : 'bg-transparent text-white opacity-40 hover:opacity-100'
+                                                        }`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                            
+                                            {/* Custom Date Chip with Hidden Input */}
+                                            <div className="relative flex-1">
+                                                <button
+                                                    type="button"
+                                                    className={`w-full py-2 text-[10px] tracking-widest uppercase border border-white transition-all ${
+                                                        date !== new Date().toISOString().split('T')[0] && 
+                                                        date !== new Date(Date.now() - 86400000).toISOString().split('T')[0]
+                                                        ? 'bg-white text-black font-bold' : 'bg-transparent text-white opacity-40 hover:opacity-100'
+                                                    }`}
+                                                    onClick={() => document.getElementById('custom-date-picker').showPicker()}
+                                                >
+                                                    {date !== new Date().toISOString().split('T')[0] && 
+                                                     date !== new Date(Date.now() - 86400000).toISOString().split('T')[0]
+                                                     ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+                                                     : 'Pick Date'}
+                                                </button>
+                                                <input
+                                                    id="custom-date-picker"
+                                                    type="date"
+                                                    value={date}
+                                                    onChange={(e) => setDate(e.target.value)}
+                                                    className="absolute inset-0 opacity-0 cursor-pointer pointer-events-none"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* Description */}

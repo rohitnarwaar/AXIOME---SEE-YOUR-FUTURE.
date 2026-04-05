@@ -93,8 +93,8 @@ def get_daily_summary(transactions: List[Dict]) -> Dict[str, Any]:
         if dt.date() == today:
             today_transactions.append(t)
     
-    money_in = sum(t['amount'] for t in today_transactions if t.get('type') == 'income')
-    money_out = sum(t['amount'] for t in today_transactions if t.get('type') == 'expense')
+    money_in = sum(float(t.get('amount') or 0) for t in today_transactions if t.get('type') == 'income')
+    money_out = sum(float(t.get('amount') or 0) for t in today_transactions if t.get('type') == 'expense')
     
     return {
         "date": today.isoformat(),
@@ -122,7 +122,7 @@ def get_weekly_summary(transactions: List[Dict]) -> Dict[str, Any]:
     for t in week_transactions:
         if t.get('type') == 'expense':
             category = t.get('category', 'Other')
-            spending_by_category[category] = spending_by_category.get(category, 0) + t['amount']
+            spending_by_category[category] = spending_by_category.get(category, 0) + float(t.get('amount') or 0)
     
     # Get top 3 categories
     top_categories = sorted(
@@ -131,7 +131,7 @@ def get_weekly_summary(transactions: List[Dict]) -> Dict[str, Any]:
         reverse=True
     )[:3]
     
-    total_spent = sum(t['amount'] for t in week_transactions if t.get('type') == 'expense')
+    total_spent = sum(float(t.get('amount') or 0) for t in week_transactions if t.get('type') == 'expense')
     
     return {
         "weekStart": week_start.isoformat(),
@@ -159,7 +159,7 @@ def calculate_budget_status(transactions: List[Dict], budgets: Dict[str, float])
     spending_by_category = {}
     for t in month_transactions:
         category = t.get('category', 'Other')
-        spending_by_category[category] = spending_by_category.get(category, 0) + t['amount']
+        spending_by_category[category] = spending_by_category.get(category, 0) + float(t.get('amount') or 0)
     
     # Build status for each budget category
     budget_status = {}
