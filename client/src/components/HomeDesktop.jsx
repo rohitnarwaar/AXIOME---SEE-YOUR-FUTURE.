@@ -398,7 +398,7 @@ export default function HomeDesktop() {
                             { title: 'Present Snapshot', image: 'https://placehold.co/300x200/222222/666666/png?text=Snapshot' },
                             { title: 'Savings Over Time', image: 'https://placehold.co/300x200/222222/666666/png?text=Savings' },
                             { title: 'Debt & Payoff Paths', image: 'https://placehold.co/300x200/222222/666666/png?text=Debt' },
-                            { title: 'Future Scenerios', image: 'https://placehold.co/300x200/222222/666666/png?text=Future' }
+                            { title: 'Future Scenarios', image: 'https://placehold.co/300x200/222222/666666/png?text=Future' }
                         ].map((video, index) => (
                             <a
                                 key={index}

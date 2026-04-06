@@ -253,20 +253,6 @@ export default function Dashboard() {
                     .catch((err) => console.error("Cluster fetch failed", err));
 
                 setLoading(false);
-
-                // --- Spending Clusters removed from here as it was duplicated in replacement above (wait, I need to check target) ---
-                // Actually I am replacing the whole block including spending clusters logic in the target, so I should just let the first block handle Loan and Clusters.
-                // But wait, the previous block I wrote handles Loan and Clusters.
-                // And I removed Forecast and Retirement from it.
-                // So now I need to add the useEffect for Forecast and Retirement.
-
-                // Let's add the useEffect AFTER the fetchUserDataAndCheckOnboarding function or inside the component body.
-                // Logic:
-                // 1. Remove the static fetch block from `fetchUserDataAndCheckOnboarding` (done in chunk 1).
-                // 2. Add new `useEffect` hook.
-
-
-                setLoading(false);
             } catch (err) {
                 console.error(err);
                 setError("Error loading dashboard data.");
@@ -738,6 +724,13 @@ export default function Dashboard() {
 
     }, [formData, monthlySpent, monthlyIncome, transactions]);
 
+    // --- Onboarding redirect (must be before early returns to maintain hook order) ---
+    useEffect(() => {
+        if (!loading && !hasCompletedOnboarding) {
+            navigate('/onboarding');
+        }
+    }, [loading, hasCompletedOnboarding, navigate]);
+
     if (loading) return (
         <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: '"Source Code Pro", monospace' }}>
             <p className="text-sm tracking-widest uppercase">Loading your financial universe...</p>
@@ -758,7 +751,6 @@ export default function Dashboard() {
     );
 
     if (!hasCompletedOnboarding) {
-        navigate('/onboarding');
         return null;
     }
 
@@ -852,7 +844,38 @@ export default function Dashboard() {
                                     <h2 className="text-2xl font-bold tracking-tight">{userName}</h2>
                                     <p className="text-xs opacity-40 uppercase tracking-widest">{currentUser?.email}</p>
                                 </div>
-                                <div className="w-full space-y-3 pt-10">
+
+                                {/* Role Switcher (Mobile) */}
+                                <div className="w-full pt-6">
+                                    <p className="text-[10px] tracking-widest uppercase opacity-40 mb-3 text-center">Access Level</p>
+                                    <div className="flex border border-black/10 overflow-hidden">
+                                        <button
+                                            onClick={() => setUserRole('admin')}
+                                            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
+                                                userRole === 'admin'
+                                                    ? 'bg-black text-white'
+                                                    : 'bg-white text-black/40 hover:text-black/70'
+                                            }`}
+                                        >
+                                            Admin
+                                        </button>
+                                        <button
+                                            onClick={() => setUserRole('viewer')}
+                                            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${
+                                                userRole === 'viewer'
+                                                    ? 'bg-black text-white'
+                                                    : 'bg-white text-black/40 hover:text-black/70'
+                                            }`}
+                                        >
+                                            Viewer
+                                        </button>
+                                    </div>
+                                    {userRole === 'viewer' && (
+                                        <p className="text-[10px] text-yellow-600 mt-2 tracking-wide text-center">Read-only mode active</p>
+                                    )}
+                                </div>
+
+                                <div className="w-full space-y-3 pt-4">
                                     <button 
                                         onClick={() => navigate('/')}
                                         className="w-full bg-black text-white py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-black/90 transition-all border border-black"
@@ -1234,10 +1257,10 @@ export default function Dashboard() {
                                                 {spendingClusters.map((item, idx) => (
                                                     <div
                                                         key={idx}
-                                                        className="group relative flex justify-between items-center py-3 border-b border-black/[0.08] hover:bg-black/[0.005] transition-colors cursor-pointer"
+                                                        className={`group relative flex justify-between items-center py-3 border-b border-black/[0.08] hover:bg-black/[0.005] transition-colors ${userRole === 'admin' ? 'cursor-pointer' : 'cursor-default'}`}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            setEditingCategory(item.category);
+                                                            if (userRole === 'admin') setEditingCategory(item.category);
                                                         }}
                                                     >
                                                         <div>
@@ -1258,7 +1281,7 @@ export default function Dashboard() {
                                                         ) : (
                                                             <div className="flex items-center gap-3">
                                                                 <span className="text-xs font-mono">₹{item.amount.toLocaleString()}</span>
-                                                                <span className="text-[10px] opacity-0 group-hover:opacity-40 transition-opacity">EDIT</span>
+                                                                {userRole === 'admin' && <span className="text-[10px] opacity-0 group-hover:opacity-40 transition-opacity">EDIT</span>}
                                                             </div>
                                                         )}
                                                     </div>
