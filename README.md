@@ -1,10 +1,10 @@
-# ONE'S OWN / AXIOMÉ 🚀
+# AXIOMÉ 🚀
 
 **AI-Powered Financial Forecasting & Wealth Management**
 
-LifeLedger (rebranded as ONE'S OWN in the UI) is a cutting-edge personal finance application that goes beyond simple tracking. It creates a "Digital Twin" of your financial life, using AI to forecast your Net Worth, Retirement Corpus, and Debt Freedom timeline in real-time based on your daily transaction behavior.
+AXIOMÉ is a cutting-edge personal finance application that goes beyond simple tracking. It creates a "Digital Twin" of your financial life, using AI to forecast your Net Worth, Retirement Corpus, and Debt Freedom timeline in real-time based on your daily transaction behavior.
 
-![Dashboard Preview](client/public/vite.svg) *Add a screenshot here if available*
+![Dashboard Preview](web/public/favicon.ico) *Add a screenshot here if available*
 
 ---
 
@@ -50,11 +50,12 @@ This project has been built to meet and exceed the requirements for the **Financ
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **Framework**: [React](https://reactjs.org/) + [Vite](https://vitejs.dev/)
-- **Styling**: [TailwindCSS](https://tailwindcss.com/) + Custom CSS
+- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Styling**: [TailwindCSS](https://tailwindcss.com/) (Standardized Premium UI)
 - **Animations**: [Framer Motion](https://www.framer.com/motion/)
 - **Charts**: [Recharts](https://recharts.org/)
 - **Database**: [Firebase Firestore](https://firebase.google.com/)
+- **Authentication**: [Firebase Auth](https://firebase.google.com/docs/auth)
 
 ### Backend
 - **Server**: [Flask](https://flask.palletsprojects.com/) (Python)
@@ -101,32 +102,32 @@ python app.py
 ```
 *Server runs on `http://localhost:8080`*
 
-### 3. Frontend Setup (React)
-Navigate to the client folder:
+### 3. Frontend Setup (Next.js)
+Navigate to the web folder:
 ```bash
-cd ../client
+cd ../web
 npm install
 ```
 
-Create a `.env` file in `client/` with Firebase & API config:
+Create a `.env.local` file in `web/` with Firebase & API config:
 ```env
 # Backend URL
-VITE_API_BASE=http://localhost:8080
+NEXT_PUBLIC_API_BASE=http://localhost:8080
 
 # Firebase Config (Get from Firebase Console)
-VITE_FIREBASE_API_KEY=your_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_id
-VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender
-VITE_FIREBASE_APP_ID=your_app_id
+NEXT_PUBLIC_FIREBASE_API_KEY=your_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 ```
 
 Run the frontend:
 ```bash
 npm run dev
 ```
-*App runs on `http://localhost:5173`*
+*App runs on `http://localhost:3000`*
 
 ---
 
