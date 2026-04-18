@@ -14,7 +14,6 @@ export default function AchievementsWidget({ achievements }) {
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-8 border border-white border-opacity-10 rounded-sm"
             className="p-8 border border-white border-opacity-10 rounded-sm font-mono"
         >
             <h3 className="text-xs tracking-widest uppercase mb-6 opacity-60">Achievements</h3>
