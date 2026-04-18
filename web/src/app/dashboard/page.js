@@ -58,8 +58,6 @@ export default function Dashboard() {
     const [dailyInsights, setDailyInsights] = useState(null);
     const [budgetLimit, setBudgetLimit] = useState(0);
     const [categoryBudgets, setCategoryBudgets] = useState({});
-    const [monthlySpent, setMonthlySpent] = useState(0);
-    const [monthlyIncome, setMonthlyIncome] = useState(0);
     const [showAddTransaction, setShowAddTransaction] = useState(false);
     const [activeView, setActiveView] = useState("wealth"); // "wealth" or "daily"
     const [sidebarOpen, setSidebarOpen] = useState(false); // mobile sidebar toggle
@@ -163,9 +161,9 @@ export default function Dashboard() {
         return map;
     }, [transactions]);
 
-    // 4. Calculate Monthly Spent
-    useEffect(() => {
-        if (!transactions) return;
+    // 4. Calculate Monthly Spent & Income
+    const { monthlySpent, monthlyIncome } = useMemo(() => {
+        if (!transactions) return { monthlySpent: 0, monthlyIncome: 0 };
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
@@ -188,8 +186,7 @@ export default function Dashboard() {
             })
             .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-        setMonthlySpent(spent);
-        setMonthlyIncome(earned);
+        return { monthlySpent: spent, monthlyIncome: earned };
     }, [transactions]);
 
     useEffect(() => {
@@ -582,11 +579,14 @@ export default function Dashboard() {
 
     // React to data changes to update insights
     useEffect(() => {
-        if (formData && Object.keys(formData).length > 0) {
-            fetchDailyInsights();
-            fetchStreaks();
-            fetchAchievements();
-        }
+        const loadInsights = async () => {
+            if (formData && Object.keys(formData).length > 0) {
+                await fetchDailyInsights();
+                await fetchStreaks();
+                await fetchAchievements();
+            }
+        };
+        loadInsights();
     }, [formData, transactions, goals]); // Depend on transactions/goals to re-run analysis
 
     // --- Dynamic Forecasts (Real-time Integration) ---

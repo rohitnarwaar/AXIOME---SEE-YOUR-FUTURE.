@@ -404,10 +404,10 @@ export default function HomeDesktop() {
                             { title: 'Debt & Payoff Paths', image: 'https://placehold.co/300x200/222222/666666/png?text=Debt' },
                             { title: 'Future Scenarios', image: 'https://placehold.co/300x200/222222/666666/png?text=Future' }
                         ].map((video, index) => (
-                            <a
+                            <Link
                                 key={index}
-                                href="#"
-                                className="group"
+                                href="/dashboard"
+                                className="group block"
                             >
                                 <div className="mb-3 overflow-hidden bg-gray-200">
                                     <img
@@ -422,7 +422,7 @@ export default function HomeDesktop() {
                                 <p className="text-xs text-center opacity-70 mt-1 font-mono">
                                     →
                                 </p>
-                            </a>
+                            </Link>
                         ))}
                     </div>
                 </motion.div>
